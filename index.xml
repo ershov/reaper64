@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="1925db43c455fcd43397b33db71f8ac633a0ae22">
+<index version="1" name="ERSH plugins and effects" commit="3ce5220da8b2d4e112eb77819fc66142a0920153">
   <category name="JSFX">
     <reapack name="ersh_TransientController2.jsfx" type="effect" desc="Transient Controller 2 by ERSH">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Extended version of standard TransientController. Screenshot https://i.imgur.com/UMMDxQI.png Video https://i.imgur.com/UMMDxQI.png\par}
+}
+]]></description>
+        <link rel="website">https://youtu.be/twKTY5g27fE</link>
+        <link rel="screenshot">https://i.imgur.com/UMMDxQI.png</link>
+      </metadata>
       <version name="2.0" author="ersh" time="2021-11-17T04:59:39Z">
         <source>https://github.com/ershov/reaper64/raw/1925db43c455fcd43397b33db71f8ac633a0ae22/JSFX/ersh_TransientController2.jsfx</source>
       </version>
