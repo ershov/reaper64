@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects">
-<metadata><description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+<index version="1" name="ERSH plugins and effects" commit="1925db43c455fcd43397b33db71f8ac633a0ae22">
+  <category name="JSFX">
+    <reapack name="ersh_TransientController2.jsfx" type="effect" desc="Transient Controller 2 by ERSH">
+      <version name="2.0" author="ersh" time="2021-11-17T04:59:39Z">
+        <source>https://github.com/ershov/reaper64/raw/1925db43c455fcd43397b33db71f8ac633a0ae22/JSFX/ersh_TransientController2.jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <metadata>
+    <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Yury Ershov's reaper64 effects\par}
 }
-]]></description></metadata></index>
+]]></description>
+  </metadata>
+</index>
