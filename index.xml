@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="77726212eacaa7a9f2bf2b36036f00550bae2b00">
+<index version="1" name="ERSH plugins and effects" commit="f4962c42b87100acbcc284269a6500feda219427">
   <category name="JSFX">
     <reapack name="ersh_TransientController2.jsfx" type="effect" desc="Transient Controller 2 by ERSH">
       <metadata>
@@ -18,6 +18,15 @@
       </version>
       <version name="2.1" author="ersh" time="2021-11-21T07:02:21Z">
         <source>https://github.com/ershov/reaper64/raw/77726212eacaa7a9f2bf2b36036f00550bae2b00/JSFX/ersh_TransientController2.jsfx</source>
+      </version>
+      <version name="2.1.1" author="ersh" time="2021-11-21T08:08:05Z">
+        <changelog><![CDATA[v2.0:
+* Initial release
+v2.1:
+* Add gain smoothness parameter.
+* Increased internal frame rate to 1500 for finer peak resolution.
+* Performance optimization.]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/f4962c42b87100acbcc284269a6500feda219427/JSFX/ersh_TransientController2.jsfx</source>
       </version>
     </reapack>
   </category>
