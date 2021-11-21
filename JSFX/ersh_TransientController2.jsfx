@@ -1,14 +1,24 @@
 /**
- * JSFX Name: Transient Controller 2 by ERSH
- * Author: ersh
- * Licence: Apache 2.0
- * REAPER: 6.0
- * Version: 2.1
- * About: Extended version of standard TransientController. Screenshot https://i.imgur.com/UMMDxQI.png Video https://i.imgur.com/UMMDxQI.png
- * Screenshot: https://i.imgur.com/UMMDxQI.png
- * Link: https://i.imgur.com/UMMDxQI.png
- * Link: https://youtu.be/twKTY5g27fE
- */
+  JSFX Name: Transient Controller 2 by ERSH
+  Author: ersh
+  Licence: Apache 2.0
+  REAPER: 6.0
+  Version: 2.1.1
+  About:
+    Extended version of standard TransientController.
+    Screenshot https://i.imgur.com/UMMDxQI.png
+    Video https://i.imgur.com/UMMDxQI.png
+  Screenshot: https://i.imgur.com/UMMDxQI.png
+  Link: https://i.imgur.com/UMMDxQI.png
+  Link: https://youtu.be/twKTY5g27fE
+  Changelog:
+    v2.0:
+    * Initial release
+    v2.1:
+    * Add gain smoothness parameter.
+    * Increased internal frame rate to 1500 for finer peak resolution.
+    * Performance optimization.
+*/
 
 // (C) 2007, Michael Gruhn.
 // (C) 2021, Yury Ershov.
