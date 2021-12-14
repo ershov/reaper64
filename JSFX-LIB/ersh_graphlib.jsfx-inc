@@ -6,7 +6,7 @@
   Author: ersh, Yury Ershov
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.0
+  Version: 1.1.0
   Tags: development
   About:
     Time series Graph Plot Library
@@ -15,6 +15,8 @@
   Changelog:
     v1.0:
     * Initial release
+    v1.1:
+    * Bugfixes
 */
 
 // (C) 2021, Yury Ershov.
@@ -110,12 +112,12 @@ function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mo
   this.min = val_min; this.max = val_max;
   this.mode = sample_mode;
   g_ngraph += 1; g_ndata += 1;
-  freembuf(g_maxx*g_ndata + 1);
+  //freembuf(g_maxx*g_ndata + 1);
   memset(this.data1, val_default, g_maxx);
-  sample_mode == 4 ? (
-    this.data2 = g_maxx * g_ndata;
+  sample_mode == 3 ? (
+    this.data2 = g_memstart + g_maxx * g_ndata;
     g_ndata += 1;
-    freembuf(g_maxx*g_ndata + 1);
+    //freembuf(g_maxx*g_ndata + 1);
     memset(this.data2, val_default, g_maxx);
   );
 );
@@ -125,7 +127,7 @@ function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mo
 //   @sample
 //   g_nextsample();
 function g_nextsample() (
-  (play_state == 1 || play_state == 5) && g_enabled ? (
+  ((play_state == 1 || play_state == 5) && g_enabled) ? (
     (g_subsample = (g_subsample + 1) % g_spf) == 0 ? (g_idx = (g_idx + 1) % g_maxx);
   );
 );
@@ -137,9 +139,9 @@ function g_nextsample() (
 //   graph2.g_sample(spl1);
 function g_sample(sample) (
   (play_state == 1 || play_state == 5) && g_enabled ? (
-    this.mode == 0 ? (
-      // once per frame
-      g_subsample == 0 ? (this.data1[g_idx] = sample);
+    g_subsample == 0 ? (
+      // once per frame, for all modes
+      this.data2[g_idx] = this.data1[g_idx] = sample;
     ) : (
       // min / max / min-max
       this.mode == 1 || this.mode == 3 ? (
@@ -158,6 +160,32 @@ function _g_k() ( gfx_h / (this.max - this.min); );
 
 function _g_y(val, k, m) ( gfx_h - k * (val - m); );
 
+function g_paint2(offsetx) local(i ii x k y) (
+  gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
+
+  gfx_x = 34; gfx_y = g_legend_y + this.idx * (gfx_texth+4);
+  gfx_drawstr(this.title);
+  gfx_y += 3;
+  gfx_line(2, gfx_y, 30, gfx_y);
+
+  gfx_a = this.a;
+
+  i = 0;
+  ii = g_idx;
+  k = this._g_k();
+  gfx_x = offsetx;
+  gfx_y = this.data1[ii];
+  while (
+    x = i*gfx_w/g_maxx;
+    this.mode != 3 ?
+      gfx_lineto(x+offsetx, _g_y(this.data1[ii], k, this.min)) :
+      gfx_line(x+offsetx, _g_y(this.data1[ii], k, this.min), x+offsetx, _g_y(this.data2[ii], k, this.min));
+    i += 1;
+    ii = (ii + 1) % g_maxx;
+    i < g_maxx;
+  );
+);
+
 // Call this in @gfx after "clear":
 // Usage:
 //   @gfx
@@ -165,25 +193,7 @@ function _g_y(val, k, m) ( gfx_h - k * (val - m); );
 //   graph1.g_paint();
 //   graph2.g_paint();
 function g_paint() local(i ii x k) (
-  gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = this.a;
-
-  gfx_x = 34; gfx_y = g_legend_y + this.idx * (gfx_texth+4);
-  gfx_drawstr(this.title);
-  gfx_y += 3;
-  gfx_line(2, gfx_y, 30, gfx_y);
-
-  i = 0;
-  ii = g_idx;
-  k = this._g_k();
-  gfx_x = 0;
-  gfx_y = this.data1[ii];
-  while (
-    x = i*gfx_w/g_maxx;
-    gfx_lineto(x, _g_y(this.data1[ii], k, this.min));
-    i += 1;
-    ii = (ii + 1) % g_maxx;
-    i < g_maxx;
-  );
+  this.g_paint2(0);
 );
 
 // Function for drawing a constant/guide line
