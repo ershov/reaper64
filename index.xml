@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="4b5f3c85d204b222fb7d7432f4e3b0591102accd">
+<index version="1" name="ERSH plugins and effects" commit="780694504e8c6b5fb983a7006d5812ac18cec19a">
   <category name="JSFX">
+    <reapack name="ersh_agc.jsfx" type="effect" desc="Time Series Graph Plot Library">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.\par}
+}
+]]></description>
+        <link rel="website">https://github.com/ershov/reaper64</link>
+      </metadata>
+      <version name="1.0.0" author="ERSH, Yury Ershov" time="2021-12-14T13:23:12Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/780694504e8c6b5fb983a7006d5812ac18cec19a/JSFX/ersh_agc.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
