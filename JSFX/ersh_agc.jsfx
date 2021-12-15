@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.0.1
+  Version: 1.0.2
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
@@ -42,9 +42,9 @@ slider33:outparm_lufs_m=-100<-100,0,1>-LUFS-M (output)
 slider34:outparm_lufs_s=-100<-100,0,1>-LUFS-S (output)
 slider35:outparm_lufs_i=-100<-100,0,1>-LUFS-I (output)
 slider36:outparm_lufs_lra=0<0,100,1>-LRA (output)
-slider37:outparm_agc_gain=-100<-100,0,1>-AGC Gain
-slider38:outparm_agc_winmax=-100<-100,0,1>-AGC Window Max Gain
-slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope
+slider37:outparm_agc_gain=-100<-100,0,1>-AGC Gain (output)
+slider38:outparm_agc_winmax=-100<-100,0,1>-AGC Window Max Gain (output)
+slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope (output)
 
 //options:no_meter
 
@@ -54,16 +54,6 @@ slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope
 
 alloc.__memtop = __memtop();
 
-// Used-to-be-sliders:
-cfg_rms_m=1; // RMS momentary
-cfg_rms_i=1; // RMS integrated
-cfg_lufs_m=1; // LUFS momentary
-cfg_lufs_s=1; // LUFS short-term
-cfg_lra=1; // LRA loudness range
-cfg_lufs_i=1; // LUFS integrated
-cfg_alert=0; // LUFS alerts
-cfg_yellow=-12; // Yellow alert level
-cfg_red=-6; // Red alert level
 cfg_reinit=1; // Reset on playback start
 
 // rms-i, lufs-i, lra calculated 0=during playback only, 1=always
@@ -364,7 +354,7 @@ function init_lufs_filters()
 
 /////////////////////////////////////////////////////////////////////////////
 // Deque implementation
-function dq_init(sz) ( this.buf = alloc(this.sz = sz); this.front = 0; this.back = 1; );
+function dq_init(sz) ( this.buf = alloc(this.sz = (sz+=2)); this.front = 0; this.back = 1; );
 function dq_front() ( this.buf[this.front]; );
 function dq_back() ( this.buf[this.back]; );
 function dq_nfront(n) ( this.buf[(this.front+this.sz-n) % this.sz]; );
@@ -376,13 +366,13 @@ function dq_pop_back() ( this.back = ((this.back+1) % this.sz); );
 function dq_size() ( (this.front - this.back + this.sz + 1) % this.sz; );
 function dq_empty() ( ((this.front+1) % this.sz) == this.back; );
 // Ring buffer with offset tracking
-function rb_init(sz) ( this.buf = alloc(this.sz = sz); this.head = -1; );
+function rb_init(sz) ( this.buf = alloc(this.sz = (sz+=2)); this.head = -1; );
 function rb_push(val) ( this.buf[(this.head += 1) % this.sz] = val; );
 function rb_get_at(index) ( this.buf[index % this.sz]; );
 function rb_get_r_at(n) ( this.buf[(this.head - n + this.sz) % this.sz]; );
 function rb_get_tail() ( this.buf[(this.head - agc_lookahead_sz + this.sz) % this.sz]; );
 // Sliding max window // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
-function maxwin_init(sz) ( this.buf.rb_init(sz+2); this.dq.dq_init(sz+2); );
+function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
 function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain) (
   agc_envelope_gain = -agc_gain+agc_to;
 
@@ -494,11 +484,13 @@ function Reset()
   ))))))))))));
 
   agc_lookahead_sz = agc_lookahead * srate;
-  agc_buf.maxwin_init(pdc_delay = agc_lookahead_sz);
+  pdc_delay = agc_lookahead_sz;
+  agc_buf.maxwin_init(agc_lookahead_sz);
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_gain = 0;
   agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
+  agc_debug_spl0 = agc_debug_spl1 = agc_debug_spl0o = agc_debug_spl1o = 0;
   
   g_init(500, agc_lookahead*2);
   g_memstart = alloc.top;
@@ -511,10 +503,9 @@ function Reset()
 
 Reset();
 
-
 @slider
 
-Reset();
+//Reset();  // this would reset on output automation
 
 @block
 
@@ -525,11 +516,13 @@ last_nch=num_ch;
 last_sr=srate;
 
 cfg_reinit && (play_state&1) ? (
-  abs(play_position-last_play_pos) > 0.1 ? want_reset=1;
+  abs(play_position-last_play_pos) > 0.5 ? want_reset=1;
   last_play_pos=play_position+samplesblock/srate;
 );
 
 want_reset ? Reset();
+
+//pdc_delay = agc_lookahead_sz;
 
 pk_decay=pow(0.5, samplesblock/srate/PEAK_METER_DECAY);
 
