@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.0.5
+  Version: 1.0.6
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
@@ -29,6 +29,7 @@ slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
 slider4:agc_release_rate=1<1,10,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
+slider7:use_pdc_delay=100<0,100,0.01>% PDC Delay (advanced)
 
 //slider7:cfg_divider=0<0,0,1{ }>-==== Graphics settings ====
 //slider8:cfg_peak=4<0,4,1{off,true peak,true peak clips,peak,peak clips}>Peak
@@ -507,14 +508,14 @@ function Reset()
   ))))))))))));
 
   agc_lookahead_sz = agc_lookahead * srate;
-  pdc_delay = agc_lookahead_sz;
+  pdc_delay = (agc_lookahead_sz*use_pdc_delay/100)|0;
   agc_buf.maxwin_init(agc_lookahead_sz);
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_gain = agc_max;
   agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
   agc_debug_spl0 = agc_debug_spl1 = agc_debug_spl0o = agc_debug_spl1o = 0;
-  graph_range = max(abs(agc_min), abs(agc_max));
+  graph_range = max(abs(agc_min), abs(agc_max)) + abs(agc_to);
 
   g_init(500, agc_lookahead*2);
   g_memstart = alloc.top;
@@ -793,7 +794,7 @@ gfx_setfont(1, "Arial", fsz*3, $'b');
 set_color($x001018);  gfx_rect(gfx_w/2, 0, gfx_w, gfx_h);
 set_color($x002040);  gfx_rect(gfx_w/2-1, 0, 3, gfx_h);
 gfx_x = gfx_w/2; gfx_y = 0; set_color($x002050); gfx_drawstr("Lookahead",1|256,gfx_w,0);
-gfx_x = 0;       gfx_y = 0; set_color($x002040); gfx_drawstr("Delay",1|256,gfx_w/2,0);
+//gfx_x = 0;       gfx_y = 0; set_color($x002040); gfx_drawstr("Delay",1|256,gfx_w/2,0);
 gfx_setfont(1,"Arial",fsz*1.5,$'b');
 gfx_x = 0; gfx_y = 0; set_color($xA00000); gfx_drawstr("Gain",1|256,gfx_w,0);
 gfx_x = 0; gfx_y = gfx_texth; set_color($x80C0C0); gfx_setfont(1,"Arial",fsz*0.8,$'b'); gfx_drawstr("target gain",1|256,gfx_w,0);
@@ -807,37 +808,6 @@ ylo=gfx_h-yu;
 has_click = (mouse_cap&1) && !(last_cap&1) ? 1 : 0;
 last_cap=mouse_cap;
 
-(
-  set_color(MONO_COLOR);
-  tc1=(gfx_w-gfx_texth*27/16)|0;
-  tc2=(gfx_w-gfx_texth*21/16)|0;
-  tr=(gfx_texth*7/16)|0;
-  cfg_mono ? gfx_mode = 1;
-  gfx_circle(tc1,yt,tr,cfg_mono?1:0,0);
-  gfx_circle(tc2,yt,tr,cfg_mono?1:0,0);
-  cfg_mono ? (
-    set_color(BG_COLOR);
-    gfx_x=tc1-tr; gfx_y=yt-tr+1;
-    gfx_drawstr("M",1|4|256,tc2+tr,yt+tr+1);
-  );
-  has_click && abs(mouse_x-(tc1+tc2)/2) <= tr*3/2+1 && abs(mouse_y-yt) <= tr+1 ? (
-    cfg_mono=!cfg_mono;
-    slider_automate(cfg_mono);
-    has_click=0;
-  );
-);
-(
-  set_color(TEXT_COLOR);
-  tx=gfx_w-gfx_texth*3/2;
-  gfx_rect(gfx_x=tx-gfx_texth/2,gfx_y=ylo-gfx_texth/2,gfx_texth+1,gfx_texth+1,0);
-  gfx_drawstr("?",1|4,gfx_x+gfx_texth+1,gfx_y+gfx_texth+1);
-  has_click && abs(mouse_x-tx) < gfx_texth/2 && abs(mouse_y-ylo) < gfx_texth/2 ? (
-    sliders_showing = slider_show(UI_SLIDER_MASK,-1) > 0;
-    has_click=0;
-  );
-);
-
-// AGC
 function gfx_bar(x1, y1, x2, y2) local(t) (
   x1 > x2 ? (t=x1;x1=x2;x2=t;);
   y1 > y2 ? (t=y1;y1=y2;y2=t;);
@@ -887,12 +857,42 @@ loop(agc_buf.dq.dq_size(),
   n += 1;
 );
 
+(
+  set_color(MONO_COLOR);
+  tc1=(gfx_w-gfx_texth*27/16)|0;
+  tc2=(gfx_w-gfx_texth*21/16)|0;
+  tr=(gfx_texth*7/16)|0;
+  cfg_mono ? gfx_mode = 1;
+  gfx_circle(tc1,yt,tr,cfg_mono?1:0,0);
+  gfx_circle(tc2,yt,tr,cfg_mono?1:0,0);
+  cfg_mono ? (
+    set_color(BG_COLOR);
+    gfx_x=tc1-tr; gfx_y=yt-tr+1;
+    gfx_drawstr("M",1|4|256,tc2+tr,yt+tr+1);
+  );
+  has_click && abs(mouse_x-(tc1+tc2)/2) <= tr*3/2+1 && abs(mouse_y-yt) <= tr+1 ? (
+    cfg_mono=!cfg_mono;
+    slider_automate(cfg_mono);
+    has_click=0;
+  );
+);
+(
+  set_color(TEXT_COLOR);
+  tx=gfx_w-gfx_texth*3/2;
+  gfx_rect(gfx_x=tx-gfx_texth/2,gfx_y=ylo-gfx_texth/2,gfx_texth+1,gfx_texth+1,0);
+  gfx_drawstr("=",1|4,gfx_x+gfx_texth+1,gfx_y+gfx_texth+1);
+  has_click && abs(mouse_x-tx) < gfx_texth/2 && abs(mouse_y-ylo) < gfx_texth/2 ? (
+    sliders_showing = slider_show(UI_SLIDER_MASK,-1) > 0;
+    has_click=0;
+  );
+);
+
 //has_click ? Reset();
 
 
 
 
-
+/*
 // Appreciate IXix: https://forum.cockos.com/showpost.php?p=364454
 
 SHOWDEBUG = 0; //Set non-zero to enable the debug view
@@ -982,3 +982,5 @@ SHOWDEBUG ?
     );
 
 );
+*/
+
