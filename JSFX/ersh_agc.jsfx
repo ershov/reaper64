@@ -29,7 +29,7 @@ slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
 slider4:agc_release_rate=1<1,10,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
-slider7:use_pdc_delay=100<0,100,0.01>% PDC Delay (advanced)
+slider7:use_pdc_delay=1<0,1,1{No,Yes}>Set PDC Delay
 
 //slider7:cfg_divider=0<0,0,1{ }>-==== Graphics settings ====
 //slider8:cfg_peak=4<0,4,1{off,true peak,true peak clips,peak,peak clips}>Peak
@@ -508,7 +508,7 @@ function Reset()
   ))))))))))));
 
   agc_lookahead_sz = agc_lookahead * srate;
-  pdc_delay = (agc_lookahead_sz*use_pdc_delay/100)|0;
+  pdc_delay = (use_pdc_delay ? agc_lookahead_sz : 0);
   agc_buf.maxwin_init(agc_lookahead_sz);
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
