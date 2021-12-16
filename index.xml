@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="35897508affdadefc37d8881c0ec3aa1974dd4ad">
+<index version="1" name="ERSH plugins and effects" commit="fa88787eb0b23b145c8f46fb343f114f2d47ab02">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)">
       <metadata>
@@ -27,6 +27,11 @@
         <changelog><![CDATA[v1.0:
 * Initial release]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/35897508affdadefc37d8881c0ec3aa1974dd4ad/JSFX/ersh_agc.jsfx</source>
+      </version>
+      <version name="1.0.3" author="ERSH, Yury Ershov" time="2021-12-16T01:41:53Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/fa88787eb0b23b145c8f46fb343f114f2d47ab02/JSFX/ersh_agc.jsfx</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
