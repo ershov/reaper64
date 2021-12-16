@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="b052a42676c149156cbdd686671adf6643145782">
+<index version="1" name="ERSH plugins and effects" commit="207ed0f6b34885043f2e820314d23d89b250f6dc">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)">
       <metadata>
@@ -10,7 +10,7 @@
 {\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.\par}
 }
 ]]></description>
-        <link rel="website">https://youtu.be/vmj6efE1AAE</link>
+        <link rel="website">https://youtu.be/hPcTy4PMVwg</link>
         <link rel="screenshot">https://i.imgur.com/u10GzPp.png</link>
       </metadata>
       <version name="1.0.0" author="ERSH, Yury Ershov" time="2021-12-14T13:33:48Z">
@@ -54,6 +54,13 @@
 v1.1.0:
 * Add Predictive Peak Limiter for non-peak driven modes]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/b052a42676c149156cbdd686671adf6643145782/JSFX/ersh_agc.jsfx</source>
+      </version>
+      <version name="1.1.1" author="ERSH, Yury Ershov" time="2021-12-16T17:06:34Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/207ed0f6b34885043f2e820314d23d89b250f6dc/JSFX/ersh_agc.jsfx</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
