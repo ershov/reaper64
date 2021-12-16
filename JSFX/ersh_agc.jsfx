@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.0.6
+  Version: 1.1.0
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
@@ -12,6 +12,8 @@
   Changelog:
     v1.0:
     * Initial release
+    v1.1.0:
+    * Add Predictive Peak Limiter for non-peak driven modes
 */
 
 // (C) 2021, Yury Ershov.
@@ -26,15 +28,14 @@ desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cocko
 slider1:agc_by=0<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
 slider2:agc_to=-1<-100,0,0.01>AGC Output level (in units above)
 slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
-slider4:agc_release_rate=1<1,10,0.001>AGC Release, dB/sec
+slider4:agc_release_rate=1<1,20,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
-slider7:use_pdc_delay=1<0,1,1{No,Yes}>Set PDC Delay
+slider7:cfg_use_peak_limiter=1<0,1,1{No,Yes}>Use Predictive Peak Limiter
+slider8:use_pdc_delay=1<0,1,1{No,Yes}>Set PDC Delay
 
-//slider7:cfg_divider=0<0,0,1{ }>-==== Graphics settings ====
-//slider8:cfg_peak=4<0,4,1{off,true peak,true peak clips,peak,peak clips}>Peak
-slider9:cfg_mono=0<0,1,1{off,on}>Force mono analysis
-slider10:cfg_out_auto=0<0,16,1{off,all,all (inverted),Peak,Peak (inverted),RMS-M,RMS-M (inverted),RMS-I,RMS-I (inverted),LUFS-M,LUFS-M (inverted),LUFS-S,LUFS-S (inverted),LUFS-I,LUFS-I (inverted),LRA,LRA (inverted)}>Output loudness values as automation
+slider19:cfg_mono=0<0,1,1{off,on}>Force mono analysis
+slider20:cfg_out_auto=0<0,16,1{off,all,all (inverted),Peak,Peak (inverted),RMS-M,RMS-M (inverted),RMS-I,RMS-I (inverted),LUFS-M,LUFS-M (inverted),LUFS-S,LUFS-S (inverted),LUFS-I,LUFS-I (inverted),LRA,LRA (inverted)}>Output loudness values as automation
 
 slider30:outparm_peak=-150<-150,20,1>-Peak/True peak dB (output)
 slider31:outparm_rms_m=-100<-100,0,1>-RMS-M (output)
@@ -83,7 +84,7 @@ PEAK_METER_DECAY=0.150;
 LOUD_METER_UPDATE=0.100; // default 100ms, must be divisible into both 0.4 and 3.0
 LOUD_METER_SPEED=0.075;
 
-UI_SLIDER_MASK=(1<<12)-1;
+UI_SLIDER_MASK=(1<<22)-1;
 
 ext_noinit=1;
 ext_nodenorm=1;
@@ -372,11 +373,11 @@ function dq_pop_back() ( this.back = ((this.back+1) % this.sz); );
 function dq_size() ( (this.front - this.back + this.sz + 1) % this.sz; );
 function dq_empty() ( ((this.front+1) % this.sz) == this.back; );
 // Ring buffer with offset tracking
-function rb_init(sz) ( this.buf = alloc(this.sz = (sz+=2)); this.head = -1; );
+function rb_init(sz) ( this.winsize = sz; this.buf = alloc(this.sz = (sz+=2)); this.head = -1; );
 function rb_push(val) ( this.buf[(this.head += 1) % this.sz] = val; );
 function rb_get_at(index) ( this.buf[index % this.sz]; );
 function rb_get_r_at(n) ( this.buf[(this.head - n + this.sz) % this.sz]; );
-function rb_get_tail() ( this.buf[(this.head - agc_lookahead_sz + this.sz) % this.sz]; );
+function rb_get_tail() ( this.buf[(this.head - this.winsize + this.sz) % this.sz]; );
 // Sliding max window // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
 function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
 function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain gain2) (
@@ -403,7 +404,7 @@ function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain 
     );
   ) : (
     // If the slope is going up, keep the closer but steeper edges
-    gain_angle = (gain-agc_envelope_gain) / (agc_lookahead_sz+1);
+    gain_angle = (gain-agc_envelope_gain) / (agc_lookahead_sz+1);  // TODO: use specific preview window for this since peak limiter uses a different value
     while (!this.dq.dq_empty() && (
               dpos = (pos=this.dq.dq_back())-winstart;
               gain2 = this.buf.rb_get_at(pos);
@@ -429,13 +430,13 @@ function maxwin_off() ( agc_debug_max_off = this.dq.dq_front() - this.buf.head +
 function maxwin_tail_gain() ( this.buf.rb_get_tail(); );
 /////////////////////////////////////////////////////////////////////////////
 // down - fast, up - release
-function scale_gain(gain, target_gain, distance) (
+function scale_gain(gain, target_gain, distance, pre, release_rate) (
   target_gain < gain ? (
-    distance > agc_pre ?
-      (gain + (target_gain - gain) / (distance-agc_pre+1)) :
+    distance > pre ?
+      (gain + (target_gain - gain) / (distance-pre+1)) :
       target_gain;
   ) :
-    min(target_gain, (gain + agc_release_rate/srate));
+    min(target_gain, (gain + release_rate/srate));
 );
 /////////////////////////////////////////////////////////////////////////////
 
@@ -507,9 +508,12 @@ function Reset()
   num_ch > 56 ? ( ch56.init(56); ch57.init(57); ch58.init(58); ch59.init(59); ch60.init(60); ch61.init(61); ch62.init(62); ch63.init(63);
   ))))))))))));
 
+  use_peak_limiter = (agc_by > 1 && cfg_use_peak_limiter);
+
   agc_lookahead_sz = agc_lookahead * srate;
   pdc_delay = (use_pdc_delay ? agc_lookahead_sz : 0);
   agc_buf.maxwin_init(agc_lookahead_sz);
+  use_peak_limiter ? agc_pbuf.maxwin_init(agc_lookahead_sz);
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_gain = agc_max;
@@ -524,6 +528,13 @@ function Reset()
   graph_inputenvmax.g_add_graph("Input Gain Max", 1,0.65,0,1, -graph_range,graph_range, -150, 2);
   graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -graph_range,graph_range, -150, 2);
   graph_agc.g_add_graph("AGC", 1,0,0,1, -graph_range,graph_range, -150, 0);
+
+  ///graph_peak_debug.g_add_graph("Peak Debug", 0.4,0,0,1, -graph_range,graph_range, -150, 2);
+  use_peak_limiter ? graph_peak.g_add_graph("Peak Limiter", 0.5,0,0.5,1, -graph_range,graph_range, -150, 2);
+  agc_peak = agc_gain;
+  agc_peak_release_db_sec = 1000;
+  agc_peak_lookahead = srate*0.05;
+  agc_peak_pre = agc_peak_lookahead/5;
 );
 
 Reset();
@@ -728,8 +739,10 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
 (play_state&1) ? (
   spl0_buf.rb_push(spl0);
   spl1_buf.rb_push(spl1);
+  global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/log(10) : -150);
+  use_peak_limiter ? agc_pbuf.maxwin_add(global_sample_peak_db);
   agc_input =
-    agc_by == 0 || agc_by == 1 ? (global_sample_peak > 0 ? log(global_sample_peak)*20/log(10) : -150) : // Peak, True Peak
+    agc_by == 0 || agc_by == 1 ? global_sample_peak_db : // Peak, True Peak
     agc_by == 2 ? (rms_m_db + (cfg_mono ? -3 : 0)) : // RMS-M
     agc_by == 3 ? (rms_i_db + (cfg_mono ? -3 : 0)) : // RMS-I
     agc_by == 4 ? (lufs_m_db + (cfg_mono ? -3 : 0)) : // LUFS-M
@@ -744,19 +757,38 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   agc_target_gain =  -agc_winmax + agc_to;
   agc_target_off = agc_buf.maxwin_off();
   agc_debug_gain_prev = agc_gain;
-  agc_gain = min(max(scale_gain(agc_gain, agc_target_gain, agc_target_off), agc_min), agc_max);
+  agc_gain = min(max(scale_gain(agc_gain, agc_target_gain, agc_target_off, agc_pre, agc_release_rate), agc_min), agc_max);
   agc_debug_gain_diff = agc_gain - agc_debug_gain_prev;
-  agc_spl_scale = 10^(agc_gain/20);
-
   g_nextsample();
   graph_smpl.g_sample((spl0+spl1)/2);
   graph_inputenvmax.g_sample(agc_winmax);
   graph_inputenv.g_sample(-agc_gain+agc_to);
   graph_input.g_sample(agc_input);
-  graph_agc.g_sample(agc_gain);
 
-  //spl0 *= agc_spl_scale;
-  //spl1 *= agc_spl_scale;
+  use_peak_limiter ? (
+    agc_peak_off = agc_pbuf.maxwin_off();
+    agc_peak_max = agc_pbuf.maxwin_max();
+    //agc_peak = min(max(scale_gain(agc_peak, -agc_pbuf.maxwin_max()+agc_to, agc_pbuf.maxwin_off(), 1, agc_peak_release_db_sec), agc_min), agc_max);
+    engage_limiter = agc_peak_off > agc_peak_lookahead || (agc_peak_max+agc_gain <= 0);
+    agc_peak = min(max(scale_gain(agc_peak,
+                                  engage_limiter ?
+                                    (agc_gain-agc_to) :
+                                    -agc_peak_max,
+                                  agc_peak_off, agc_peak_pre, agc_peak_release_db_sec), agc_min), agc_max);
+    agc_and_peak_gain = min(agc_peak, agc_gain);
+    graph_peak.g_sample(engage_limiter ? -150 : -agc_peak);
+    //graph_peak.g_sample(-agc_peak); // for debug
+    //graph_peak.g_sample(global_sample_peak_db);
+    //graph_peak.g_sample(agc_pbuf.maxwin_max());
+    ///graph_peak_debug.g_sample(global_sample_peak_db);
+  
+  ) : (
+    agc_and_peak_gain = agc_gain;
+  );
+
+  graph_agc.g_sample(agc_and_peak_gain);
+  agc_spl_scale = 10^(agc_and_peak_gain/20);
+
   spl0 = spl0_buf.rb_get_tail() * agc_spl_scale;
   spl1 = spl1_buf.rb_get_tail() * agc_spl_scale;
 );
@@ -827,6 +859,8 @@ graph_inputenvmax.g_paint2(-gfx_w/2);
 graph_inputenv.g_paint2(-gfx_w/2);
 graph_input.g_paint2();
 graph_agc.g_paint2(-gfx_w/2);
+use_peak_limiter ? graph_peak.g_paint2(-gfx_w/2);
+///graph_peak_debug.g_paint2();
 graph_input.g_trackmouse(2, 1, "dB");
 
 set_color($xFF0000);
