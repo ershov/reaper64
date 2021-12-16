@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.0.3
+  Version: 1.0.4
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
@@ -192,19 +192,20 @@ function g_const(n, r,g,b,a) local (y) (
   y = _g_y(n, this._g_k(), this.min);
   gfx_line(0, y, gfx_w-1, y);
 );
-function g_trackmouse(precision, plus, unit) local(frame) (
+function g_trackmouse(precision, plus, unit) local(frame x) (
   mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
     gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
     frame = floor(mouse_x*g_maxx/gfx_w);
     val = this.data1[(frame + g_idx) % g_maxx];
     gfx_circle(mouse_x, _g_y(val, this._g_k(), this.min), 2, 1, 1);
 
-    gfx_x = gfx_w*3/4; gfx_y = 4;
+    x = mouse_x/gfx_w*(gfx_w-fsz*10);
+    gfx_x = x; gfx_y = mouse_y - 3*(gfx_texth+4) - gfx_texth/2;
     plus ? (val >= 0 ? gfx_drawstr("+"));
     gfx_drawnumber(val, precision); gfx_drawstr(unit);
-    gfx_x = gfx_w*3/4; gfx_y = 4 + (gfx_texth+4);
+    gfx_x = x; gfx_y = mouse_y - 2*(gfx_texth+4) - gfx_texth/2;
     gfx_drawnumber(frame * g_spf, 0); gfx_drawstr(" samples");
-    gfx_x = gfx_w*3/4; gfx_y = 4 + 2*(gfx_texth+4);
+    gfx_x = x; gfx_y = mouse_y - 1*(gfx_texth+4) - gfx_texth/2;
     gfx_drawnumber(frame * g_spf / srate, 5); gfx_drawstr(" sec");
   );
 );
@@ -513,14 +514,15 @@ function Reset()
   agc_gain = 0;
   agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
   agc_debug_spl0 = agc_debug_spl1 = agc_debug_spl0o = agc_debug_spl1o = 0;
-  
+  graph_range = max(abs(agc_min), abs(agc_max));
+
   g_init(500, agc_lookahead*2);
   g_memstart = alloc.top;
   graph_smpl.g_add_graph("Input Sample", 0,0.5,0,0.5, -1,1, 0, 3);
-  graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -agc_max,-agc_min, -150, 2);
-  graph_inputenvmax.g_add_graph("Input Gain Max", 1,0.65,0,1, -agc_max,-agc_min, -150, 2);
-  graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -agc_max,-agc_min, -150, 2);
-  graph_agc.g_add_graph("AGC", 1,0,0,1, -agc_max,-agc_min, -150, 0);
+  graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -graph_range,graph_range, -150, 2);
+  graph_inputenvmax.g_add_graph("Input Gain Max", 1,0.65,0,1, -graph_range,graph_range, -150, 2);
+  graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -graph_range,graph_range, -150, 2);
+  graph_agc.g_add_graph("AGC", 1,0,0,1, -graph_range,graph_range, -150, 0);
 );
 
 Reset();
@@ -775,21 +777,32 @@ num_ch > 48 ? ( ch48.copypks(); ch49.copypks(); ch50.copypks(); ch51.copypks(); 
 num_ch > 56 ? ( ch56.copypks(); ch57.copypks(); ch58.copypks(); ch59.copypks(); ch60.copypks(); ch61.copypks(); ch62.copypks(); ch63.copypks();
 ))))))))))));
 
+function set_color(trgb)
+(
+  gfx_set((trgb&$xff0000)/$xff0000,(trgb&$xff00)/$xff00,(trgb&$xff)/$xff);
+);
+
 gfx_clear=((BG_COLOR&$xff)<<16)|(BG_COLOR&$xff00)|((BG_COLOR&$xff0000)>>16);
 
 fsz=FONT_SZ_MIN+min(gfx_w/100,FONT_SZ_MAX-FONT_SZ_MIN);
 fsz *= 1.0;
 gfx_ext_retina > 1 ? fsz *= 1.5;
+
+
+gfx_setfont(1, "Arial", fsz*3, $'b');
+set_color($x001018);  gfx_rect(gfx_w/2, 0, gfx_w, gfx_h);
+set_color($x002040);  gfx_rect(gfx_w/2-1, 0, 3, gfx_h);
+gfx_x = gfx_w/2; gfx_y = 0; set_color($x002050); gfx_drawstr("Lookahead",1|256,gfx_w,0);
+gfx_x = 0;       gfx_y = 0; set_color($x002040); gfx_drawstr("Delay",1|256,gfx_w/2,0);
+gfx_setfont(1,"Arial",fsz*1.5,$'b');
+gfx_x = 0; gfx_y = 0; set_color($xA00000); gfx_drawstr("Gain",1|256,gfx_w,0);
+gfx_x = 0; gfx_y = gfx_texth; set_color($x80C0C0); gfx_setfont(1,"Arial",fsz*0.8,$'b'); gfx_drawstr("target gain",1|256,gfx_w,0);
+
 gfx_setfont(1,"Arial",fsz);
 
 yu=gfx_texth*7/8;
 yt = (gfx_h-yu*3.5+yu)|0;
 ylo=gfx_h-yu;
-
-function set_color(trgb)
-(
-  gfx_set((trgb&$xff0000)/$xff0000,(trgb&$xff00)/$xff00,(trgb&$xff)/$xff);
-);
 
 has_click = (mouse_cap&1) && !(last_cap&1) ? 1 : 0;
 last_cap=mouse_cap;
@@ -830,7 +843,6 @@ function gfx_bar(x1, y1, x2, y2) local(t) (
   y1 > y2 ? (t=y1;y1=y2;y2=t;);
   gfx_rect(x1, y1, x2-x1+1, y2-y1+1);
 );
-//function agc_y(val) ( gfx_h - (val-agc_min)*gfx_h/(agc_max-agc_min); );
 function agc_y(val) ( graph_agc._g_y(val, graph_agc._g_k(), graph_agc.min); );
 x=gfx_w/2;
 
