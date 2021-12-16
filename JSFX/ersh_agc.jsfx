@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.0.2
+  Version: 1.0.3
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
@@ -25,7 +25,7 @@ desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cocko
 
 slider1:agc_by=0<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
 slider2:agc_to=-1<-100,0,0.01>AGC Output level (in units above)
-slider3:agc_lookahead=5<0,30,0.001>AGC Lookahead, sec
+slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
 slider4:agc_release_rate=1<1,10,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
@@ -45,6 +45,10 @@ slider36:outparm_lufs_lra=0<0,100,1>-LRA (output)
 slider37:outparm_agc_gain=-100<-100,0,1>-AGC Gain (output)
 slider38:outparm_agc_winmax=-100<-100,0,1>-AGC Window Max Gain (output)
 slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope (output)
+
+// TODO: Add side chain input(s)
+// TODO: Output some slider values as pin outs
+// TODO: Need to maintain more than 2 inputs?
 
 //options:no_meter
 
@@ -373,7 +377,7 @@ function rb_get_r_at(n) ( this.buf[(this.head - n + this.sz) % this.sz]; );
 function rb_get_tail() ( this.buf[(this.head - agc_lookahead_sz + this.sz) % this.sz]; );
 // Sliding max window // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
 function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
-function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain) (
+function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain gain2) (
   agc_envelope_gain = -agc_gain+agc_to;
 
   // Remove the elements which are out of window
@@ -382,21 +386,39 @@ function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain)
     this.dq.dq_pop_front();
   );
 
-  // Remove all elements smaller than the currently being added element (remove useless elements)
+  // Check if the last element is smaller than the second last and not greater than the current
+  gain2 = this.buf.rb_get_at(this.dq.dq_nback(0));
+  this.dq.dq_size() > 1 &&
+  gain2 < this.buf.rb_get_at(this.dq.dq_nback(1)) &&
+  gain2 <= gain &&
+  this.dq.dq_pop_back();
 
-  (agc_envelope_gain > gain) ? (
+  // Remove all elements smaller than the currently being added element (remove useless elements)
+  (agc_envelope_gain >= gain) ? (
+    // If the slope is going down, just mark the peaks
     while (!this.dq.dq_empty() && gain >= this.buf.rb_get_at(this.dq.dq_back())) (
       this.dq.dq_pop_back();
     );
   ) : (
-    gain_angle = (gain-agc_envelope_gain) / agc_lookahead_sz;
+    // If the slope is going up, keep the closer but steeper edges
+    gain_angle = (gain-agc_envelope_gain) / (agc_lookahead_sz+1);
     while (!this.dq.dq_empty() && (
-            dpos=(pos=this.dq.dq_back())-winstart;
-            (dpos > agc_pre) && (gain_angle >= (this.buf.rb_get_at(pos)-agc_envelope_gain)/dpos))) (
+              dpos = (pos=this.dq.dq_back())-winstart;
+              gain2 = this.buf.rb_get_at(pos);
+              //Keep the ones that are equal! vv
+              (dpos > agc_pre) &&
+              (gain_angle > (gain2 - agc_envelope_gain)/dpos))) (
       this.dq.dq_pop_back();
     );
+    // If the slope is going up, mark both sides of "platos", skipping the middle
+    agc_by >= 2 &&
+    this.dq.dq_size() > 1 &&
+    this.buf.rb_get_at(this.dq.dq_nback(0)) == gain &&
+    this.buf.rb_get_at(this.dq.dq_nback(1)) == gain &&
+    this.dq.dq_pop_back();
   );
 
+  // This order matters! the second is using the updated "head"
   this.buf.rb_push(agc_debug_smpl = gain);
   this.dq.dq_push_back(this.buf.head);
 );
