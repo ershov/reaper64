@@ -3,12 +3,12 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.1.0
+  Version: 1.1.1
   Tags: analysis loudness dynamics
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
   Screenshot: https://i.imgur.com/u10GzPp.png
   Link: https://github.com/ershov/reaper64
-  Link: https://youtu.be/vmj6efE1AAE
+  Link: https://youtu.be/hPcTy4PMVwg
   Changelog:
     v1.0:
     * Initial release
@@ -25,8 +25,8 @@ desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cocko
 //author: ERSH
 
 
-slider1:agc_by=0<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
-slider2:agc_to=-1<-100,0,0.01>AGC Output level (in units above)
+slider1:agc_by=4<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
+slider2:agc_to=-18<-100,0,0.01>AGC Output level (in units above)
 slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
 slider4:agc_release_rate=1<1,20,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
@@ -793,7 +793,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   spl1 = spl1_buf.rb_get_tail() * agc_spl_scale;
 );
 
-@gfx 500 300
+@gfx 700 400
 
 ch0.copypks(); ch1.copypks();
 num_ch > 2 ? ( ch2.copypks(); ch3.copypks();
