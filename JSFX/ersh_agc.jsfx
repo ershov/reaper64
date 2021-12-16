@@ -878,3 +878,95 @@ loop(agc_buf.dq.dq_size(),
 //has_click ? Reset();
 
 
+
+
+
+// Appreciate IXix: https://forum.cockos.com/showpost.php?p=364454
+
+SHOWDEBUG = 0; //Set non-zero to enable the debug view
+
+SHOWDEBUG ?
+(    
+    //Options
+    dPrecision = 2;             //Decimal places for numbers
+    dLeft = 300;                  //Debug window position in pixels
+    dTop = 5;                   //Debug window position in pixels
+    dRows = 14;                  //Row count for buffer data
+    dCols = 3;                  //Column count for buffer data
+
+    dRowHeight = 20;            //Row height offset for buffer data
+    dColWidth = 140;             //Column width offset for buffer data
+    dMarginX = 5;               //Left margin in pixels
+    dMarginY = 5;               //Top margin in pixels
+    dBufferY = 30;              //Vertical offset for buffer data display
+    
+    gfx_a = 1;
+    gfx_mode = 0;
+
+    //Calculate debug window size
+    dWidth = dCols * dColWidth + dMarginX;
+    dHeight = dRows * dRowHeight + dBufferY;
+
+    //Set background colour
+    gfx_r=1;gfx_g=1;gfx_b=1;gfx_a=1;
+
+    //Erase
+    gfx_x = dLeft;
+    gfx_y = dTop;
+    gfx_rectto(dLeft + dWidth, dTop + dHeight);
+
+    //Set text colour
+    gfx_r=.7;gfx_g=0;gfx_b=.3;
+
+    //Draw debug vars
+    gfx_x = dLeft + dMarginX; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug1, dPrecision);
+
+    gfx_x = dLeft + dMarginX + dColWidth; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug2, dPrecision);
+
+    gfx_x = dLeft + dMarginX + dColWidth * 2; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug3, dPrecision);
+
+    gfx_x = dLeft + dMarginX + dColWidth * 3; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug4, dPrecision);
+
+    gfx_x = dLeft + dMarginX + dColWidth * 4; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug5, dPrecision);
+
+    gfx_x = dLeft + dMarginX + dColWidth * 5; gfx_y = dTop + dMarginY;
+    gfx_drawNumber(debug6, dPrecision);
+
+    //Draw separator
+    gfx_x = dLeft + dMarginX;
+    gfx_y = dTop + dBufferY - dMarginY;
+    gfx_lineto(dLeft + dWidth - dMarginX, gfx_y, 1);
+
+    //Draw buffer data
+    di = 0;
+    dRow = 0;
+    loop
+    (
+        dRows,
+        dCol = 0;
+        loop
+        (
+            dCols,
+            gfx_x = dLeft + dMarginX + dCol * dColWidth;
+            gfx_y = dTop + dMarginY + dBufferY + dRow * dRowHeight;
+            i = (di / 3)|0;
+            what = di % 3;
+            (i < agc_debug_dq_sz) && (
+              (what == 0 && gfx_drawNumber(agc_buf.dq.dq_nfront(i), dPrecision);) ||
+              (what == 1 && gfx_drawNumber(agc_buf.buf.rb_get_at(agc_buf.dq.dq_nfront(i)), dPrecision););
+              (what == 2 && gfx_drawNumber(
+                (agc_buf.buf.rb_get_at(agc_buf.dq.dq_nfront(i))-(-agc_gain+agc_to))/(agc_buf.dq.dq_nfront(i)-agc_buf.buf.head+agc_lookahead_sz),
+                dPrecision+5););
+            );
+            di += 1;
+            dCol += 1;
+        );
+        dRow += 1;
+    );
+
+);
