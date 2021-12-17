@@ -3,9 +3,24 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.1.1
+  Version: 1.2.0
   Tags: analysis loudness dynamics
+  Provides:
+    ersh_agc-inc/ersh_alloc.jsfx-inc
+    ersh_agc-inc/ersh_deque.jsfx-inc
+    ersh_agc-inc/ersh_graphlib.jsfx-inc
+    ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc
   About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
+
+    Automatic Gain Control uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.
+
+    If the input gain in not a real/true peak then the output can actually exceed 0dB level.
+    For that case there is a peak limiter that use the same lookahead window and engages shortly before the prospective peak excess and compensates for that event.
+
+    PDC Delay setting is to request plugin to report the lookahead window to Reaper so that the delay is automatically compensated.
+    That however incurs additional CPU and Memory usage, that's why there is a setting to turn it on/off.
+
+    Some settings are adjustable on the fly, some are not. Make sure to stop/start the playback to apply the changes.
   Screenshot: https://i.imgur.com/u10GzPp.png
   Link: https://github.com/ershov/reaper64
   Link: https://youtu.be/hPcTy4PMVwg
@@ -14,11 +29,18 @@
     * Initial release
     v1.1.0:
     * Add Predictive Peak Limiter for non-peak driven modes
+    v1.2.0:
+    * (internal) Use separate files for libraries
 */
 
 // (C) 2021, Yury Ershov.
 // This effect Copyright (C) 2021 and later Cockos Incorporated
 // License: LGPL - http://www.gnu.org/licenses/lgpl.html
+
+import ersh_alloc.jsfx-inc
+import ersh_deque.jsfx-inc
+import ersh_graphlib.jsfx-inc
+import ersh_ringbuf_abs.jsfx-inc
 
 desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)
 //tags: analysis loudness dynamics
@@ -98,123 +120,6 @@ DB_PER_BIN=1/BINS_PER_DB;
 
 REAPER_MAX_CHANNELS=64;
 
-// graphlib {
-function g_init(framerate, seconds_x) (
-  // Externally modifiable parameters
-  g_legend_y = 4;        // set this after g_init to adjust
-  g_memstart = 0;        // where the data arrays start
-  g_memend = 0;          // data ends here (informational)
-  // internal parameters
-  g_ngraph = 0;                    // number of graphs
-  g_ndata = 0;                     // number of graph data arrays
-  g_framerate =
-    framerate >= 1 ? framerate :
-    framerate <= -1 ? (srate / -framerate) :
-    srate;
-  g_maxx = g_framerate * seconds_x;  // number of dots on axis X
-  g_spf = floor(max(srate / g_framerate, 1));     // samples per frame
-  g_idx = 0;                       // current sample offset in array
-  g_subsample = 0;                 // sample number within the frame: 0 ... g_spf
-  g_enabled = 1;
-);
-//   sample_mode:
-//     0: sample once per frame
-//     1: use min
-//     2: use max
-//     3: use both min and max
-function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mode) (
-  this.idx = g_ngraph;
-  this.data2 = this.data1 = g_memstart + g_maxx * g_ndata;
-  this.title = title;
-  this.r = r; this.g = g; this.b = b; this.a = a;
-  this.min = val_min; this.max = val_max;
-  this.mode = sample_mode;
-  g_ngraph += 1; g_ndata += 1;
-  //freembuf(g_memstart + g_maxx*g_ndata + 1);
-  memset(this.data1, val_default, g_maxx);
-  sample_mode == 3 ? (
-    this.data2 = g_memstart + g_maxx * g_ndata;
-    g_ndata += 1;
-    //freembuf(g_memstart + g_maxx*g_ndata + 1);
-    memset(this.data2, val_default, g_maxx);
-  );
-  g_memend = g_memstart + g_maxx*g_ndata;
-);
-function g_nextsample() (
-  ((play_state == 1 || play_state == 5) && g_enabled) ? (
-    (g_subsample = (g_subsample + 1) % g_spf) == 0 ? (g_idx = (g_idx + 1) % g_maxx);
-  );
-);
-function g_sample(sample) (
-  (play_state == 1 || play_state == 5) && g_enabled ? (
-    g_subsample == 0 ? (
-      // once per frame, for all modes
-      this.data2[g_idx] = this.data1[g_idx] = sample;
-    ) : (
-      // min / max / min-max
-      this.mode == 1 || this.mode == 3 ? (
-        // min or min-max
-        this.data1[g_idx] = min(this.data1[g_idx], sample);
-      );
-      this.mode == 2 || this.mode == 3 ? (
-        // max or min-max
-        this.data2[g_idx] = max(this.data2[g_idx], sample);
-      );
-    );
-  );
-);
-function _g_k() ( gfx_h / (this.max - this.min); );
-function _g_y(val, k, m) ( gfx_h - k * (val - m); );
-function g_paint2(offsetx) local(i ii x k y) (
-  gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
-
-  gfx_x = 34; gfx_y = g_legend_y + this.idx * (gfx_texth+4);
-  gfx_drawstr(this.title);
-  gfx_y += 3;
-  gfx_line(2, gfx_y, 30, gfx_y);
-
-  gfx_a = this.a;
-
-  i = 0;
-  ii = g_idx;
-  k = this._g_k();
-  gfx_x = offsetx;
-  gfx_y = this.data1[ii];
-  while (
-    x = i*gfx_w/g_maxx;
-    this.mode != 3 ?
-      gfx_lineto(x+offsetx, _g_y(this.data1[ii], k, this.min)) :
-      gfx_line(x+offsetx, _g_y(this.data1[ii], k, this.min), x+offsetx, _g_y(this.data2[ii], k, this.min));
-    i += 1;
-    ii = (ii + 1) % g_maxx;
-    i < g_maxx;
-  );
-);
-function g_paint() local(i ii x k) ( this.g_paint2(0); );
-function g_const(n, r,g,b,a) local (y) (
-  gfx_r = r; gfx_g = g; gfx_b = b; gfx_a = a;
-  y = _g_y(n, this._g_k(), this.min);
-  gfx_line(0, y, gfx_w-1, y);
-);
-function g_trackmouse(precision, plus, unit) local(frame x) (
-  mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
-    gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
-    frame = floor(mouse_x*g_maxx/gfx_w);
-    val = this.data1[(frame + g_idx) % g_maxx];
-    gfx_circle(mouse_x, _g_y(val, this._g_k(), this.min), 2, 1, 1);
-
-    x = mouse_x/gfx_w*(gfx_w-fsz*10);
-    gfx_x = x; gfx_y = mouse_y - 3*(gfx_texth+4) - gfx_texth/2;
-    plus ? (val >= 0 ? gfx_drawstr("+"));
-    gfx_drawnumber(val, precision); gfx_drawstr(unit);
-    gfx_x = x; gfx_y = mouse_y - 2*(gfx_texth+4) - gfx_texth/2;
-    gfx_drawnumber(frame * g_spf, 0); gfx_drawstr(" samples");
-    gfx_x = x; gfx_y = mouse_y - 1*(gfx_texth+4) - gfx_texth/2;
-    gfx_drawnumber(frame * g_spf / srate, 5); gfx_drawstr(" sec");
-  );
-);
-// } graphlib
-
 // sinc filter for true peak
 function sinc_gen_val() global(srate) local(sincpos windowpos) instance(slice_pos) (
   windowpos = (2.0 * $pi / 16/*SINC_FILTER_SIZE*/) * slice_pos;
@@ -246,11 +151,6 @@ function sinc_slice_abs(hist*) global() (
     hist.h08 * this.v08 + hist.h09 * this.v09 + hist.h10 * this.v10 + hist.h11 * this.v11 +
     hist.h12 * this.v12 + hist.h13 * this.v13 + hist.h14 * this.v14 + hist.h15 * this.v15
   );
-);
-
-function alloc(sz) global()
-(
-  memset((this.top+=sz)-sz,0,sz);
 );
 
 function init(chidx)
@@ -361,25 +261,6 @@ function init_lufs_filters()
   f2b2=1;
 );
 
-/////////////////////////////////////////////////////////////////////////////
-// Deque implementation
-function dq_init(sz) ( this.buf = alloc(this.sz = (sz+=2)); this.front = 0; this.back = 1; );
-function dq_front() ( this.buf[this.front]; );
-function dq_back() ( this.buf[this.back]; );
-function dq_nfront(n) ( this.buf[(this.front+this.sz-n) % this.sz]; );
-function dq_nback(n) ( this.buf[(this.back+n) % this.sz]; );
-function dq_push_front(val) ( this.buf[this.front = ((this.front+1) % this.sz)] = val; );
-function dq_push_back(val) ( this.buf[this.back = ((this.back+this.sz-1) % this.sz)] = val; );
-function dq_pop_front() ( this.front = ((this.front+this.sz-1) % this.sz); );
-function dq_pop_back() ( this.back = ((this.back+1) % this.sz); );
-function dq_size() ( (this.front - this.back + this.sz + 1) % this.sz; );
-function dq_empty() ( ((this.front+1) % this.sz) == this.back; );
-// Ring buffer with offset tracking
-function rb_init(sz) ( this.winsize = sz; this.buf = alloc(this.sz = (sz+=2)); this.head = -1; );
-function rb_push(val) ( this.buf[(this.head += 1) % this.sz] = val; );
-function rb_get_at(index) ( this.buf[index % this.sz]; );
-function rb_get_r_at(n) ( this.buf[(this.head - n + this.sz) % this.sz]; );
-function rb_get_tail() ( this.buf[(this.head - this.winsize + this.sz) % this.sz]; );
 // Sliding max window // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
 function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
 function maxwin_add(gain) local (winstart pos dpos gain_angle agc_envelope_gain gain2) (
