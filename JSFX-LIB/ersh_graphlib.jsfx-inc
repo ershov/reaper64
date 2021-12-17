@@ -1,24 +1,6 @@
 //////////////////////////////////////////////////////////////////////////
 // Simple graph library by ERSH {
 
-/**
-  JSFX Name: Time Series Graph Plot Library
-  Author: ersh, Yury Ershov
-  Licence: GPL
-  REAPER: 6.0
-  Version: 1.1.0
-  Tags: development
-  About:
-    Time series Graph Plot Library
-  Screenshot: https://i.imgur.com/UMMDxQI.png
-  Link: https://github.com/ershov/reaper64
-  Changelog:
-    v1.0:
-    * Initial release
-    v1.1:
-    * Bugfixes
-*/
-
 // (C) 2021, Yury Ershov.
 
 // NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
@@ -74,6 +56,7 @@ function g_init(framerate, seconds_x) (
   // Externally modifiable parameters
   g_legend_y = 4;        // set this after g_init to adjust
   g_memstart = 0;        // where the data arrays start
+  g_memend = 0;          // data ends here (informational)
   // internal parameters
   g_ngraph = 0;                    // number of graphs
   g_ndata = 0;                     // number of graph data arrays
@@ -112,14 +95,15 @@ function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mo
   this.min = val_min; this.max = val_max;
   this.mode = sample_mode;
   g_ngraph += 1; g_ndata += 1;
-  //freembuf(g_maxx*g_ndata + 1);
+  //freembuf(g_memstart + g_maxx*g_ndata + 1);
   memset(this.data1, val_default, g_maxx);
   sample_mode == 3 ? (
     this.data2 = g_memstart + g_maxx * g_ndata;
     g_ndata += 1;
-    //freembuf(g_maxx*g_ndata + 1);
+    //freembuf(g_memstart + g_maxx*g_ndata + 1);
     memset(this.data2, val_default, g_maxx);
   );
+  g_memend = g_memstart + g_maxx*g_ndata;
 );
 
 // Call this once in @sample _before_ calling g_sample()
@@ -192,9 +176,7 @@ function g_paint2(offsetx) local(i ii x k y) (
 //   gfx_clear = 0;
 //   graph1.g_paint();
 //   graph2.g_paint();
-function g_paint() local(i ii x k) (
-  this.g_paint2(0);
-);
+function g_paint() local(i ii x k) ( this.g_paint2(0); );
 
 // Function for drawing a constant/guide line
 // Usage:
@@ -214,19 +196,20 @@ function g_const(n, r,g,b,a) local (y) (
 //   @gfx
 //   ...g_paint();
 //   graph2.g_trackmouse(2, 1, "dB");
-function g_trackmouse(precision, plus, unit) local(frame) (
+function g_trackmouse(precision, plus, unit) local(frame x) (
   mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
     gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
     frame = floor(mouse_x*g_maxx/gfx_w);
     val = this.data1[(frame + g_idx) % g_maxx];
     gfx_circle(mouse_x, _g_y(val, this._g_k(), this.min), 2, 1, 1);
 
-    gfx_x = gfx_w*3/4; gfx_y = 4;
+    x = mouse_x/gfx_w*(gfx_w-fsz*10);
+    gfx_x = x; gfx_y = mouse_y - 3*(gfx_texth+4) - gfx_texth/2;
     plus ? (val >= 0 ? gfx_drawstr("+"));
     gfx_drawnumber(val, precision); gfx_drawstr(unit);
-    gfx_x = gfx_w*3/4; gfx_y = 4 + (gfx_texth+4);
+    gfx_x = x; gfx_y = mouse_y - 2*(gfx_texth+4) - gfx_texth/2;
     gfx_drawnumber(frame * g_spf, 0); gfx_drawstr(" samples");
-    gfx_x = gfx_w*3/4; gfx_y = 4 + 2*(gfx_texth+4);
+    gfx_x = x; gfx_y = mouse_y - 1*(gfx_texth+4) - gfx_texth/2;
     gfx_drawnumber(frame * g_spf / srate, 5); gfx_drawstr(" sec");
   );
 );

@@ -1,0 +1,17 @@
+// Deque (double-sided push-pull queue).
+//
+// Requires:
+//  alloc.jsfx-inc:
+//    alloc()
+@init
+function dq_init(sz) ( this.buf = alloc(this.sz = (sz+=2)); this.front = 0; this.back = 1; );
+function dq_front() ( this.buf[this.front]; );
+function dq_back() ( this.buf[this.back]; );
+function dq_nfront(n) ( this.buf[(this.front+this.sz-n) % this.sz]; );
+function dq_nback(n) ( this.buf[(this.back+n) % this.sz]; );
+function dq_push_front(val) ( this.buf[this.front = ((this.front+1) % this.sz)] = val; );
+function dq_push_back(val) ( this.buf[this.back = ((this.back+this.sz-1) % this.sz)] = val; );
+function dq_pop_front() ( this.front = ((this.front+this.sz-1) % this.sz); );
+function dq_pop_back() ( this.back = ((this.back+1) % this.sz); );
+function dq_size() ( (this.front - this.back + this.sz + 1) % this.sz; );
+function dq_empty() ( ((this.front+1) % this.sz) == this.back; );

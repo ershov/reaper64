@@ -1,0 +1,20 @@
+// Ring buffer with absolute position tracking.
+//
+// Requires:
+//  alloc.jsfx-inc:
+//    alloc()
+//
+// Usage:
+//
+//  rb = rb_init(size); // Guaranteed to store "size" elements.
+//
+//  rb.rb_push(x);
+//  ...
+//  absolute_pos = rb.head;
+//  rb.rb_at(absolute_pos);
+@init
+function rb_init(sz) ( this.winsize = sz; this.buf = alloc(this.sz = (sz+=2)); this.head = -1; );
+function rb_push(val) ( this.buf[(this.head += 1) % this.sz] = val; );
+function rb_get_at(index) ( this.buf[index % this.sz]; );
+function rb_get_r_at(n) ( this.buf[(this.head - n + this.sz) % this.sz]; );
+function rb_get_tail() ( this.buf[(this.head - this.winsize + this.sz) % this.sz]; );

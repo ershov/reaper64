@@ -1,3 +1,4 @@
+// Ring buffer
 @init
 function ring_init(buf, size, defval) (
   this.buf = buf; this.size = size; this.read = 1; this.write = 0; this.mid = floor(size/2); memset(buf, defval, size);

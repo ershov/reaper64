@@ -103,6 +103,7 @@ function g_init(framerate, seconds_x) (
   // Externally modifiable parameters
   g_legend_y = 4;        // set this after g_init to adjust
   g_memstart = 0;        // where the data arrays start
+  g_memend = 0;          // data ends here (informational)
   // internal parameters
   g_ngraph = 0;                    // number of graphs
   g_ndata = 0;                     // number of graph data arrays
@@ -129,14 +130,15 @@ function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mo
   this.min = val_min; this.max = val_max;
   this.mode = sample_mode;
   g_ngraph += 1; g_ndata += 1;
-  //freembuf(g_maxx*g_ndata + 1);
+  //freembuf(g_memstart + g_maxx*g_ndata + 1);
   memset(this.data1, val_default, g_maxx);
   sample_mode == 3 ? (
     this.data2 = g_memstart + g_maxx * g_ndata;
     g_ndata += 1;
-    //freembuf(g_maxx*g_ndata + 1);
+    //freembuf(g_memstart + g_maxx*g_ndata + 1);
     memset(this.data2, val_default, g_maxx);
   );
+  g_memend = g_memstart + g_maxx*g_ndata;
 );
 function g_nextsample() (
   ((play_state == 1 || play_state == 5) && g_enabled) ? (
@@ -793,7 +795,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   spl1 = spl1_buf.rb_get_tail() * agc_spl_scale;
 );
 
-@gfx 700 400
+@gfx 800 320
 
 ch0.copypks(); ch1.copypks();
 num_ch > 2 ? ( ch2.copypks(); ch3.copypks();
