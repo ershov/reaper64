@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="207ed0f6b34885043f2e820314d23d89b250f6dc">
+<index version="1" name="ERSH plugins and effects" commit="85e2de308897c46abcab11d325cfa6cbeb44e2d1">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)">
       <metadata>
@@ -8,6 +8,10 @@
 \widowctrl\hyphauto
 
 {\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 If the input gain in not a real/true peak then the output can actually exceed 0dB level. For that case there is a peak limiter that use the same lookahead window and engages shortly before the prospective peak excess and compensates for that event.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 PDC Delay setting is to request plugin to report the lookahead window to Reaper so that the delay is automatically compensated. That however incurs additional CPU and Memory usage, that's why there is a setting to turn it on/off.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Some settings are adjustable on the fly, some are not. Make sure to stop/start the playback to apply the changes.\par}
 }
 ]]></description>
         <link rel="website">https://youtu.be/hPcTy4PMVwg</link>
@@ -61,6 +65,19 @@ v1.1.0:
 v1.1.0:
 * Add Predictive Peak Limiter for non-peak driven modes]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/207ed0f6b34885043f2e820314d23d89b250f6dc/JSFX/ersh_agc.jsfx</source>
+      </version>
+      <version name="1.2.0" author="ERSH, Yury Ershov" time="2021-12-17T06:27:29Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes
+v1.2.0:
+* (internal) Use separate files for libraries]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc.jsfx</source>
+        <source file="ersh_agc-inc/ersh_alloc.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_alloc.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
