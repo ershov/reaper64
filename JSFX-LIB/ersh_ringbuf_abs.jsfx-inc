@@ -1,8 +1,7 @@
 // Ring buffer with absolute position tracking.
 //
 // Requires:
-//  alloc.jsfx-inc:
-//    alloc()
+//  ersh_alloc.jsfx-inc
 //
 // Usage:
 //

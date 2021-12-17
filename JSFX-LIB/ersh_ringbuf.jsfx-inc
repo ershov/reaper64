@@ -3,8 +3,15 @@
 function ring_init(buf, size, defval) (
   this.buf = buf; this.size = size; this.read = 1; this.write = 0; this.mid = floor(size/2); memset(buf, defval, size);
 );
-function ring_put(s) ( this.buf[this.write] = s; );
-function ring_read() ( this.buf[this.read]; );
-function ring_get(offset) ( this.buf[(this.read + offset) % this.size]; );
-function ring_rget(offset) ( this.buf[(this.write + this.size - 1 - offset) % this.size]; );
+// Slide the window one sample
 function ring_advance() ( this.write = this.read; this.read = (this.read+1) % this.size; );
+// Set the latest value, keeping position
+function ring_put(s) ( this.buf[this.write] = s; );
+// Slide position, push the value
+function ring_push(s) ( this.ring_advance(); this.ring_put(s); );
+// Get the earliest value
+function ring_read() ( this.buf[this.read]; );
+// Get the value with offset forward from the earliest
+function ring_get(offset) ( this.buf[(this.read + offset) % this.size]; );
+// Get the value with offset back from the latest
+function ring_rget(offset) ( this.buf[(this.write + this.size - 1 - offset) % this.size]; );

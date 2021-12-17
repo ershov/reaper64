@@ -203,7 +203,7 @@ function g_trackmouse(precision, plus, unit) local(frame x) (
     val = this.data1[(frame + g_idx) % g_maxx];
     gfx_circle(mouse_x, _g_y(val, this._g_k(), this.min), 2, 1, 1);
 
-    x = mouse_x/gfx_w*(gfx_w-fsz*10);
+    x = mouse_x/gfx_w*(gfx_w-gfx_texth*14);
     gfx_x = x; gfx_y = mouse_y - 3*(gfx_texth+4) - gfx_texth/2;
     plus ? (val >= 0 ? gfx_drawstr("+"));
     gfx_drawnumber(val, precision); gfx_drawstr(unit);
