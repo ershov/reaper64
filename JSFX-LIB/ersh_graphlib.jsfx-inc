@@ -41,6 +41,40 @@
 
 @init
 
+FONT_SZ_MIN=12;
+FONT_SZ_MAX=16;
+
+// Thick line x2
+function gfx_line2(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy);
+  gfx_line(x1,y1,x2,y2);
+);
+function gfx_lineto2(x, y) local(dx dy) ( gfx_line2(gfx_x, gfx_y, x, y); );
+// Thick line x3
+function gfx_line3(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy);
+  gfx_line(x1-dx,y1-dy,x2-dx,y2-dy);
+  gfx_line(x1,y1,x2,y2);
+);
+function gfx_lineto3(x, y) local(dx dy) ( gfx_line3(gfx_x, gfx_y, x, y); );
+function gfx_line_thick(x1, y1, x2, y2, thick) local(dx dy) (
+  thick <= 1 ? (
+    thick = 1;
+    dx = 0; dy = 0;
+  ) : (
+    (abs(x1-x2) >= abs(y1-y2)) ?
+      ( dx=0; dy=1; y1 -= thick/2; y2 -= thick/2; ) :
+      ( dx=1; dy=0; x1 -= thick/2; x2 -= thick/2; );
+  );
+  loop(thick,
+    gfx_line(x1,y1,x2,y2);
+    x1 += dx; x2 += dx; y1 += dy; y2 += dy;
+  );
+  gfx_x = x2; gfx_y = y2;
+);
+
 // Call this function first in @init
 // Usage:
 //   @init
@@ -144,29 +178,33 @@ function _g_k() ( gfx_h / (this.max - this.min); );
 
 function _g_y(val, k, m) ( gfx_h - k * (val - m); );
 
-function g_paint2(offsetx) local(i ii x k y) (
+function g_paint2(offsetx) local(i ii x k y range) (
+  g_idxfrom = max(g_idxfrom, 0);
+  g_idxto = min(g_idxto, g_maxx);
+  (g_idxfrom >= g_idxto) ? (g_idxfrom = 0; g_idxto = g_maxx; );
+  range = g_idxto - g_idxfrom;
+
   gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
 
   gfx_x = 34; gfx_y = g_legend_y + this.idx * (gfx_texth+4);
   gfx_drawstr(this.title);
-  gfx_y += 3;
+  gfx_y += gfx_texth/3;
   gfx_line(2, gfx_y, 30, gfx_y);
 
   gfx_a = this.a;
 
   i = 0;
-  ii = g_idx;
+  ii = g_idx + g_idxfrom;
   k = this._g_k();
   gfx_x = offsetx;
   gfx_y = this.data1[ii];
-  while (
-    x = i*gfx_w/g_maxx;
+  loop (g_idxto - g_idxfrom,
+    x = i*gfx_w/range;
     this.mode != 3 ?
       gfx_lineto(x+offsetx, _g_y(this.data1[ii], k, this.min)) :
       gfx_line(x+offsetx, _g_y(this.data1[ii], k, this.min), x+offsetx, _g_y(this.data2[ii], k, this.min));
     i += 1;
     ii = (ii + 1) % g_maxx;
-    i < g_maxx;
   );
 );
 
@@ -196,26 +234,52 @@ function g_const(n, r,g,b,a) local (y) (
 //   @gfx
 //   ...g_paint();
 //   graph2.g_trackmouse(2, 1, "dB");
-function g_trackmouse(precision, plus, unit) local(frame x) (
+function g_trackmouse(precision, plus, unit) local(frame range x y textw texth) (
   mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
-    gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
-    frame = floor(mouse_x*g_maxx/gfx_w);
-    val = this.data1[(frame + g_idx) % g_maxx];
-    gfx_circle(mouse_x, _g_y(val, this._g_k(), this.min), 2, 1, 1);
+    gfx_setfont(1,"Arial",fsz*0.8, $'b');
 
-    x = mouse_x/gfx_w*(gfx_w-gfx_texth*14);
-    gfx_x = x; gfx_y = mouse_y - 3*(gfx_texth+4) - gfx_texth/2;
+    range = g_idxto - g_idxfrom;
+    frame = floor(mouse_x*range/gfx_w+0.5) + g_idxfrom;
+    val = this.data1[(frame + g_idx) % g_maxx];
+    y = _g_y(val, this._g_k(), this.min);
+
+    x = (frame - g_idxfrom)*gfx_w/range;
+    gfx_r = gfx_g =gfx_b = 1; gfx_a = 1;
+    gfx_circle(x, y, 2, 1, 1);
+    gfx_line(x-8, y, x+8, y);
+    gfx_line(x, y-8, x, y+8);
+    //gfx_line3(x, y, x + gfx_w/range, _g_y(this.data1[(frame + 1 + g_idx) % g_maxx], this._g_k(), this.min));
+
+    gfx_measurestr("0000000 samples", textw, texth);
+    texth *= 1.15;
+    x = mouse_x/gfx_w*(gfx_w-textw);
+
+    gfx_r = gfx_g = gfx_b = 0; gfx_a = 0.5;
+    gfx_rect(x-10, mouse_y - 3*texth - gfx_texth, textw+10, 3*texth + gfx_texth/2, 1);
+    gfx_r = gfx_g = gfx_b = 1; gfx_a = 0.15;
+    gfx_rect(x-10, mouse_y - 3*texth - gfx_texth, textw+10, 3*texth + gfx_texth/2, 0);
+
+    gfx_r = gfx_g = gfx_b = 1; gfx_a = 1;
+    gfx_x = x; gfx_y = mouse_y - 3*texth - gfx_texth/2;
     plus ? (val >= 0 ? gfx_drawstr("+"));
     gfx_drawnumber(val, precision); gfx_drawstr(unit);
-    gfx_x = x; gfx_y = mouse_y - 2*(gfx_texth+4) - gfx_texth/2;
+    gfx_x = x; gfx_y = mouse_y - 2*texth - gfx_texth/2;
     gfx_drawnumber(frame * g_spf, 0); gfx_drawstr(" samples");
-    gfx_x = x; gfx_y = mouse_y - 1*(gfx_texth+4) - gfx_texth/2;
+    gfx_x = x; gfx_y = mouse_y - 1*texth - gfx_texth/2;
     gfx_drawnumber(frame * g_spf / srate, 5); gfx_drawstr(" sec");
+
+    gfx_setfont(1,"Arial",fsz);
   );
 );
 
 // Enable or disable graph data update
 function g_set_enabled(flag) ( g_enabled = flag; );
+
+function g_setfont() (  // for @gfx
+  fsz=FONT_SZ_MIN+min(gfx_w/100,FONT_SZ_MAX-FONT_SZ_MIN);
+  gfx_ext_retina > 1 ? fsz *= 1.5;
+  gfx_setfont(1,"Arial",fsz);
+);
 
 // }
 //////////////////////////////////////////////////////////////////////////
