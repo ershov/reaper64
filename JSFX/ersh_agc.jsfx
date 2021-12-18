@@ -37,10 +37,10 @@
 // This effect Copyright (C) 2021 and later Cockos Incorporated
 // License: LGPL - http://www.gnu.org/licenses/lgpl.html
 
-import ersh_alloc.jsfx-inc
-import ersh_deque.jsfx-inc
-import ersh_graphlib.jsfx-inc
-import ersh_ringbuf_abs.jsfx-inc
+import ersh_agc-inc/ersh_alloc.jsfx-inc
+import ersh_agc-inc/ersh_deque.jsfx-inc
+import ersh_agc-inc/ersh_graphlib.jsfx-inc
+import ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc
 
 desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)
 //tags: analysis loudness dynamics
