@@ -1,5 +1,5 @@
 /**
-  JSFX Name: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)
+  JSFX Name: AGC - Automatic Gain Control
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
@@ -10,9 +10,11 @@
     ersh_agc-inc/ersh_deque.jsfx-inc
     ersh_agc-inc/ersh_graphlib.jsfx-inc
     ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc
-  About: Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.
+  About:
+    Automatic Gain Control (AGC) by ERSH, based on Loudness Meter Peak/RMS/LUFS (Cockos).
+    Auto gain control (rider) by Peak, True Peak, RMS, LUFS.
 
-    Automatic Gain Control uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.
+    Plugin uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.
 
     If the input gain in not a real/true peak then the output can actually exceed 0dB level.
     For that case there is a peak limiter that use the same lookahead window and engages shortly before the prospective peak excess and compensates for that event.
@@ -42,7 +44,7 @@ import ersh_agc-inc/ersh_deque.jsfx-inc
 import ersh_agc-inc/ersh_graphlib.jsfx-inc
 import ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc
 
-desc: Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)
+desc: AGC - Automatic Gain Control
 //tags: analysis loudness dynamics
 //author: ERSH
 
