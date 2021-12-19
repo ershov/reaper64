@@ -1,0 +1,57 @@
+#!/bin/bash
+
+cat << "_E"
+  Plugin preset creator/updater.
+  This scans for *.jsfx files, then it locates the lines like:
+preset:"Name" val1 val2 val3 ...
+  and creates a corresponding "*.rpl" file with all presets.
+  Also, it updates "provides:" section of the plugin
+
+_E
+
+IFS=$'\n'
+for f in `find . -name \*.jsfx`; do
+  rm -f "$f.rpl"
+  egrep -q ^preset: "$f" && {
+    PLUGIN="$(perl -nE 'if (/^desc:(.*)/) { $x=$1; $x=~s/^\s+//sg; $x=~s/\s+$//sg; print $x; exit; }' "$f")"
+    echo "$f.rpl:"
+    echo "  $PLUGIN:"
+    echo "<REAPER_PRESET_LIBRARY \`JS: $PLUGIN\`" > "$f.rpl"
+    for PRESET in $(perl -nE 'if (/^preset:(.*)/) { $x=$1; $x=~s/^\s+//sg; $x=~s/\s+$//sg; say $x; }' "$f"); do
+      eval "ARGS=($PRESET)"
+      NAME="${ARGS[0]}"
+      echo "    $NAME"
+      ARGS=("${ARGS[@]:1}")
+      echo "  <PRESET \`${NAME}\`" >> "$f.rpl" >> "$f.rpl"
+      perl -E '@a=(@ARGV, ("-")x64); say "@a[0..63] '$NAME'";' "$ARGS" | base64 -b 128 | perl -npe '$_="    $_"' >> "$f.rpl"
+      echo "  >" >> "$f.rpl"
+    done
+    # add the config to "provides" section if it's not there
+    perl -i -npE '
+      BEGIN { $f=q{'"$(basename $f)"'}; }
+      if ($stage eq "provides") {
+        if (!$spaces2) { /^(\s++)/; $spaces2 = $1; }
+        if (/^$spaces2$f\.rpl/) {
+          $has_rpl = 1;
+          say STDERR "  Info: Found reference to RPL at line $.";
+        }
+        if (!/^$spaces2/) {
+          if (!$has_rpl) {
+            say "$spaces2$f.rpl";
+            say STDERR "  Info: Added reference to RPL at line $.";
+          }
+          $stage = "end";
+        }
+      }
+      if (!$stage && /^(\s*)provides:\s*$/is) {
+        $spaces = $1;
+        $stage = "provides";
+      }
+      END {
+        $stage ne "end" and say STDERR "  *** WARNING: no \"Provides\" section found! The preset file will not be shipped with the package by ReaPack!"
+      }
+    ' "$f"
+    echo ">" >> "$f.rpl"
+  }
+done
+

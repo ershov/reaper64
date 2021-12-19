@@ -1,0 +1,13 @@
+#!/bin/bash
+NAME="$1"
+shift
+cat << _E;
+<REAPER_PRESET_LIBRARY \`JS: ####\`
+  <PRESET \`${NAME}\`
+_E
+perl -E '@a=(@ARGV, ("-")x64); say "@a[0..63] '$NAME'";' "$@" | base64 -b 128 | perl -npe '$_="    $_"'
+cat << "_E";
+  >
+>
+_E
+
