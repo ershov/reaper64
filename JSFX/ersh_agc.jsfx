@@ -10,6 +10,7 @@
     ersh_agc-inc/ersh_deque.jsfx-inc
     ersh_agc-inc/ersh_graphlib.jsfx-inc
     ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc
+    ersh_agc.jsfx.rpl
   About:
     Automatic Gain Control (AGC) by ERSH, based on Loudness Meter Peak/RMS/LUFS (Cockos).
     Auto gain control (rider) by Peak, True Peak, RMS, LUFS.
@@ -48,6 +49,9 @@ desc: AGC - Automatic Gain Control
 //tags: analysis loudness dynamics
 //author: ERSH
 
+preset:"Normal" 4 -18 5 1 -50 50 1 1
+preset:"Medium" 4 -18 3 4 -50 50 1 1
+preset:"Extreme" 0 -10 0.1 100 -100 100 1 1
 
 slider1:agc_by=4<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
 slider2:agc_to=-18<-100,0,0.01>AGC Output level (in units above)
