@@ -1,13 +1,40 @@
 #!/bin/bash
 
-cat << "_E"
-  Plugin preset creator/updater.
-  This scans for *.jsfx files, then it locates the lines like:
-preset:"Name" val1 val2 val3 ...
-  and creates a corresponding "*.rpl" file with all presets.
-  Also, it updates "provides:" section of the plugin
+VERSION=1.0.0
+
+[[ -n "$*" ]] && {
+  cat << _E
+
+Plugin preset creator/updater version $VERSION.
+Usage: $0 [-h]
+
+This scans for *.jsfx files in the current directory,
+then it locates the lines like:
+
+    preset:"Name" val1 val2 val3 ...
+(must be at the beginning of line and appear before @init or any other section)
+
+and creates a corresponding "*.rpl" files with all presets found.
+Also, it updates "provides:" section in the plugin
+
+Run without any args to scan and update.
+
+WARNING! Make sure you only run this tool for trusted sources!
+It uses 'eval' without any checks, hence allows arbitrary code execution.
+
+The technique was originally proposed here:
+https://forums.cockos.com/showthread.php?t=198992#post1984609
+
+Author:
+    Yury Ershov
+Github:
+    https://github.com/ershov/reaper64
+Reapack repo url:
+    https://raw.githubusercontent.com/ershov/reaper64/main/index.xml
 
 _E
+  exit
+}
 
 IFS=$'\n'
 for f in `find . -name \*.jsfx`; do
@@ -18,7 +45,7 @@ for f in `find . -name \*.jsfx`; do
     echo "  $PLUGIN:"
     echo "<REAPER_PRESET_LIBRARY \`JS: $PLUGIN\`" > "$f.rpl"
     for PRESET in $(perl -nE 'if (/^preset:(.*)/) { $x=$1; $x=~s/^\s+//sg; $x=~s/\s+$//sg; say $x; }' "$f"); do
-      eval "ARGS=($PRESET)"
+      eval "ARGS=($PRESET)" || { echo "Error processing this line of $f:"; echo "$PRESET"; exit 1; };
       NAME="${ARGS[0]}"
       echo "    $NAME"
       ARGS=("${ARGS[@]:1}")
@@ -26,32 +53,57 @@ for f in `find . -name \*.jsfx`; do
       perl -E '@a=(@ARGV, ("-")x64); say "@a[0..63] '$NAME'";' "$ARGS" | base64 -b 128 | perl -npe '$_="    $_"' >> "$f.rpl"
       echo "  >" >> "$f.rpl"
     done
-    # add the config to "provides" section if it's not there
-    perl -i -npE '
+    echo ">" >> "$f.rpl"
+
+    # check if there is a reference to the preset file in "Provides:" section
+    perl -nE '
       BEGIN { $f=q{'"$(basename $f)"'}; }
       if ($stage eq "provides") {
-        if (!$spaces2) { /^(\s++)/; $spaces2 = $1; }
-        if (/^$spaces2$f\.rpl/) {
-          $has_rpl = 1;
-          say STDERR "  Info: Found reference to RPL at line $.";
-        }
-        if (!/^$spaces2/) {
-          if (!$has_rpl) {
-            say "$spaces2$f.rpl";
-            say STDERR "  Info: Added reference to RPL at line $.";
-          }
-          $stage = "end";
-        }
+        $spaces2 or do { /^(\s++)/; $spaces2 = $1; };
+        /^$spaces2$f\.rpl/ and do { $stage="end"; exit; };  # Ok, there is a reference
+        /^$spaces2/ or exit 1;                              # there is a "Provides" section but no reference
       }
-      if (!$stage && /^(\s*)provides:\s*$/is) {
-        $spaces = $1;
-        $stage = "provides";
-      }
-      END {
-        $stage ne "end" and say STDERR "  *** WARNING: no \"Provides\" section found! The preset file will not be shipped with the package by ReaPack!"
-      }
+      !$stage && /^(\s*)provides:\s*$/is and $stage = "provides";
+      !$stage && /^\@/is and exit;                          # Any "@" section starts
+    END { exit($stage eq "end" ? $. : $stage eq "provides" ? 1 : 0); }  # No "Provides" section
     ' "$f"
-    echo ">" >> "$f.rpl"
+
+    case "$?" in
+      0)
+        echo "  *** WARNING(1): no \"Provides\" section found! The preset file will not be shipped with the package by ReaPack!"
+        ;;
+      1)
+        # add the config to "provides" section if it's not there
+        perl -i -npE '
+          BEGIN { $f=q{'"$(basename $f)"'}; }
+          if ($stage eq "provides") {
+            if (!$spaces2) { /^(\s++)/; $spaces2 = $1; }
+            if (/^$spaces2$f\.rpl/) {
+              $has_rpl = 1;
+              say STDERR "  Info(2): Found reference to RPL at line $.";
+            }
+            if (!/^$spaces2/) {
+              if (!$has_rpl) {
+                say "$spaces2$f.rpl";
+                say STDERR "  Info(2): Added reference to RPL at line $.";
+              }
+              $stage = "end";
+            }
+          }
+          if (!$stage && /^(\s*)provides:\s*$/is) {
+            $spaces = $1;
+            $stage = "provides";
+          }
+          !$stage && /^\@/is and $stage = "end";  # Any "@" section starts
+          END {
+            $stage ne "end" and say STDERR "  *** WARNING(2): no \"Provides\" section found! The preset file will not be shipped with the package by ReaPack!"
+          }
+        ' "$f"
+        ;;
+      *)
+        echo "  Info(1): Found reference to RPL at line $?"
+        ;;
+    esac
   }
 done
 
