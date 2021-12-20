@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.2.0
+  Version: 1.2.1
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -34,6 +34,8 @@
     * Add Predictive Peak Limiter for non-peak driven modes
     v1.2.0:
     * (internal) Use separate files for libraries
+    v1.2.1:
+    * Add presets
 */
 
 // (C) 2021, Yury Ershov.

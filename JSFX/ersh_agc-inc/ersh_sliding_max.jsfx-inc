@@ -1,0 +1,33 @@
+// Sliding window MAX using deque algorithm https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
+//
+// Requires:
+//  ersh_alloc.jsfx-inc
+//  ersh_deque.jsfx-inc
+//  ersh_ringbuf_abs.jsfx-inc
+//
+// * In order to use it as a sliding MIN, use "-value" instead.
+@init
+function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
+// Push a value into the sliding window
+function maxwin_add(val) local (winstart) (
+  // Remove the elements which are out of window
+  winstart = this.buf.head - this.buf.winsize;
+  while (!this.dq.dq_empty() && this.dq.dq_front() <= winstart) (
+    this.dq.dq_pop_front();
+  );
+
+  // Remove all elements smaller than the currently being added element (remove useless elements)
+  while (!this.dq.dq_empty() && val >= this.buf.rb_get_at(this.dq.dq_back())) (
+    this.dq.dq_pop_back();
+  );
+
+  // Order matters! the second is using the updated "head"
+  this.buf.rb_push(val);
+  this.dq.dq_push_back(this.buf.head);
+);
+// What's the max?
+function maxwin_max() ( this.buf.rb_get_at(this.dq.dq_front()); );
+// What's the max value's offset from the "tail" (current play pos)?
+function maxwin_off() ( this.dq.dq_front() - this.buf.head + this.buf.winsize; );
+// What's the value at the current play position?
+function maxwin_last_val() ( this.buf.rb_get_tail(); );

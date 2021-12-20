@@ -1,0 +1,14 @@
+#!/bin/bash
+
+die() { echo "$@"; exit 1; }
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+[[ -d JSFX ]] || die "No JSFX directory in $PWD"
+[[ -d JSFX-LIB ]] || die "No JSFX-INC directory in $PWD"
+
+IFS=$'\n'
+for dir in `find JSFX -name \*-inc -type d`; do
+  echo $'\n\nUpdating $dir...'
+  rsync -auv --del --inplace --exclude=.DS_Store --delete-excluded JSFX-LIB/ "$dir"
+done
+

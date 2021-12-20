@@ -1,0 +1,286 @@
+//////////////////////////////////////////////////////////////////////////
+// Simple graph library by ERSH {
+
+// (C) 2021, Yury Ershov.
+
+// NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+// WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
+// ANY DIRECT OR INDIRECT,  SPECIAL,  INCIDENTAL OR CONSEQUENTIAL DAMAGE ARISING
+// OUT OF  THE  USE  OR INABILITY  TO  USE  THIS PLUG-IN,  COMPUTER FAILTURE  OF
+// MALFUNCTION INCLUDED.  THE USE OF THE SOURCE CODE,  EITHER  PARTIALLY  OR  IN
+// TOTAL, IS ONLY GRANTED,  IF USED IN THE SENSE OF THE AUTHOR'S INTENTION,  AND
+// USED WITH ACKNOWLEDGEMENT OF THE AUTHOR. FURTHERMORE IS THIS PLUG-IN A  THIRD
+// PARTY CONTRIBUTION,  EVEN IF INCLUDED IN REAPER(TM),  COCKOS INCORPORATED  OR
+// ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
+// PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
+// ENTRUST SOMEBODY ELSE WITH DOING SO.
+
+// Further more is this released under the GPL License:
+// http://www.gnu.org/licenses/gpl.html
+
+
+// SYNOPSIS:
+//
+//   @init
+//   g_init(1500, 1.5);
+//   graph1.g_add_graph("Val 1", 1,1,0.5,1, -1,1, 0, 0);
+//   graph2.g_add_graph("Val 2", 1,0.5,1,1, -1,1, 0, 0);
+//
+//   @sample
+//   g_nextsample();
+//   graph1.g_sample(spl0);
+//   graph2.g_sample(spl1);
+//
+//   @gfx
+//   gfx_clear = 0;
+//   g_source.g_const(0, 1,1,1,0.5);
+//   graph1.g_paint();
+//   graph2.g_paint();
+//   graph1.g_trackmouse(2, 1, "");
+//
+
+@init
+
+FONT_SZ_MIN=12;
+FONT_SZ_MAX=16;
+
+// Thick line x2
+function gfx_line2(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy);
+  gfx_line(x1,y1,x2,y2);
+);
+function gfx_lineto2(x, y) local(dx dy) ( gfx_line2(gfx_x, gfx_y, x, y); );
+// Thick line x3
+function gfx_line3(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy);
+  gfx_line(x1-dx,y1-dy,x2-dx,y2-dy);
+  gfx_line(x1,y1,x2,y2);
+);
+function gfx_lineto3(x, y) local(dx dy) ( gfx_line3(gfx_x, gfx_y, x, y); );
+function gfx_line_thick(x1, y1, x2, y2, thick) local(dx dy) (
+  thick <= 1 ? (
+    thick = 1;
+    dx = 0; dy = 0;
+  ) : (
+    (abs(x1-x2) >= abs(y1-y2)) ?
+      ( dx=0; dy=1; y1 -= thick/2; y2 -= thick/2; ) :
+      ( dx=1; dy=0; x1 -= thick/2; x2 -= thick/2; );
+  );
+  loop(thick,
+    gfx_line(x1,y1,x2,y2);
+    x1 += dx; x2 += dx; y1 += dy; y2 += dy;
+  );
+  gfx_x = x2; gfx_y = y2;
+);
+
+// Call this function first in @init
+// Usage:
+//   @init
+//   g_init(1500, 1.5);
+// Args:
+//  framerate:
+//         > 0 - number of dots per second.
+//         = 0 - srate = one sample = one dot
+//         < 0 - sample rate divisor (srate / n)
+//      framerate < 0 = srate / (-n)
+//  seconds_x - number of seconds on axis X
+function g_init(framerate, seconds_x) (
+  // Externally modifiable parameters
+  g_legend_y = 4;        // set this after g_init to adjust
+  g_memstart = 0;        // where the data arrays start
+  g_memend = 0;          // data ends here (informational)
+  // internal parameters
+  g_ngraph = 0;                    // number of graphs
+  g_ndata = 0;                     // number of graph data arrays
+  g_framerate =
+    framerate >= 1 ? framerate :
+    framerate <= -1 ? (srate / -framerate) :
+    srate;
+  g_maxx = g_framerate * seconds_x;  // number of dots on axis X
+  g_spf = floor(max(srate / g_framerate, 1));     // samples per frame
+  g_idx = 0;                       // current sample offset in array
+  g_subsample = 0;                 // sample number within the frame: 0 ... g_spf
+  g_enabled = 1;
+);
+
+// Call this function in @init to add graph.
+// Usage:
+//   @init
+//   graph1.g_add_graph("Val 1", 1,1,0.5,1, -1,1, 0, 0);
+//   graph2.g_add_graph("Val 2", 1,0.5,1,1, -1,1, 0, 0);
+//   graph3.g_add_graph("Gain", 1,0.5,1,1, -60,12, 0, 0);
+// Args:
+//   title
+//   r, g, b, a - graph color
+//   val_min, val_max - value range
+//   val_default - value default
+//   sample_mode:
+//     0: sample once per frame
+//     1: use min
+//     2: use max
+//     3: use both min and max
+function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mode) (
+  this.idx = g_ngraph;
+  this.data2 = this.data1 = g_memstart + g_maxx * g_ndata;
+  this.title = title;
+  this.r = r; this.g = g; this.b = b; this.a = a;
+  this.min = val_min; this.max = val_max;
+  this.mode = sample_mode;
+  g_ngraph += 1; g_ndata += 1;
+  //freembuf(g_memstart + g_maxx*g_ndata + 1);
+  memset(this.data1, val_default, g_maxx);
+  sample_mode == 3 ? (
+    this.data2 = g_memstart + g_maxx * g_ndata;
+    g_ndata += 1;
+    //freembuf(g_memstart + g_maxx*g_ndata + 1);
+    memset(this.data2, val_default, g_maxx);
+  );
+  g_memend = g_memstart + g_maxx*g_ndata;
+);
+
+// Call this once in @sample _before_ calling g_sample()
+// Usage:
+//   @sample
+//   g_nextsample();
+function g_nextsample() (
+  ((play_state == 1 || play_state == 5) && g_enabled) ? (
+    (g_subsample = (g_subsample + 1) % g_spf) == 0 ? (g_idx = (g_idx + 1) % g_maxx);
+  );
+);
+
+// Add sample to the graph
+// Usage:
+//   @sample
+//   graph1.g_sample(spl0);
+//   graph2.g_sample(spl1);
+function g_sample(sample) (
+  (play_state == 1 || play_state == 5) && g_enabled ? (
+    g_subsample == 0 ? (
+      // once per frame, for all modes
+      this.data2[g_idx] = this.data1[g_idx] = sample;
+    ) : (
+      // min / max / min-max
+      this.mode == 1 || this.mode == 3 ? (
+        // min or min-max
+        this.data1[g_idx] = min(this.data1[g_idx], sample);
+      );
+      this.mode == 2 || this.mode == 3 ? (
+        // max or min-max
+        this.data2[g_idx] = max(this.data2[g_idx], sample);
+      );
+    );
+  );
+);
+
+function _g_k() ( gfx_h / (this.max - this.min); );
+
+function _g_y(val, k, m) ( gfx_h - k * (val - m); );
+
+function g_paint2(offsetx) local(i ii x k y range) (
+  g_idxfrom = max(g_idxfrom, 0);
+  g_idxto = min(g_idxto, g_maxx);
+  (g_idxfrom >= g_idxto) ? (g_idxfrom = 0; g_idxto = g_maxx; );
+  range = g_idxto - g_idxfrom;
+
+  gfx_r = this.r; gfx_g = this.g; gfx_b = this.b; gfx_a = 1;
+
+  gfx_x = 34; gfx_y = g_legend_y + this.idx * (gfx_texth+4);
+  gfx_drawstr(this.title);
+  gfx_y += gfx_texth/3;
+  gfx_line(2, gfx_y, 30, gfx_y);
+
+  gfx_a = this.a;
+
+  i = 0;
+  ii = g_idx + g_idxfrom;
+  k = this._g_k();
+  gfx_x = offsetx;
+  gfx_y = this.data1[ii];
+  loop (g_idxto - g_idxfrom,
+    x = i*gfx_w/range;
+    this.mode != 3 ?
+      gfx_lineto(x+offsetx, _g_y(this.data1[ii], k, this.min)) :
+      gfx_line(x+offsetx, _g_y(this.data1[ii], k, this.min), x+offsetx, _g_y(this.data2[ii], k, this.min));
+    i += 1;
+    ii = (ii + 1) % g_maxx;
+  );
+);
+
+// Call this in @gfx after "clear":
+// Usage:
+//   @gfx
+//   gfx_clear = 0;
+//   graph1.g_paint();
+//   graph2.g_paint();
+function g_paint() local(i ii x k) ( this.g_paint2(0); );
+
+// Function for drawing a constant/guide line
+// Usage:
+//   graph1.g_const(0, 1,1,1,0.5);
+function g_const(n, r,g,b,a) local (y) (
+  gfx_r = r; gfx_g = g; gfx_b = b; gfx_a = a;
+  y = _g_y(n, this._g_k(), this.min);
+  gfx_line(0, y, gfx_w-1, y);
+);
+
+// Track the graph point via mouse cursor
+// Args:
+//   precision
+//   plus - always put "+" sign in front of positive numbers
+//   unit - string after the number
+// Usage:
+//   @gfx
+//   ...g_paint();
+//   graph2.g_trackmouse(2, 1, "dB");
+function g_trackmouse(precision, plus, unit) local(frame range x y textw texth) (
+  mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
+    gfx_setfont(1,"Arial",fsz*0.8, $'b');
+
+    range = g_idxto - g_idxfrom;
+    frame = floor(mouse_x*range/gfx_w+0.5) + g_idxfrom;
+    val = this.data1[(frame + g_idx) % g_maxx];
+    y = _g_y(val, this._g_k(), this.min);
+
+    x = (frame - g_idxfrom)*gfx_w/range;
+    gfx_r = gfx_g =gfx_b = 1; gfx_a = 1;
+    gfx_circle(x, y, 2, 1, 1);
+    gfx_line(x-8, y, x+8, y);
+    gfx_line(x, y-8, x, y+8);
+    //gfx_line3(x, y, x + gfx_w/range, _g_y(this.data1[(frame + 1 + g_idx) % g_maxx], this._g_k(), this.min));
+
+    gfx_measurestr("0000000 samples", textw, texth);
+    texth *= 1.15;
+    x = mouse_x/gfx_w*(gfx_w-textw);
+
+    gfx_r = gfx_g = gfx_b = 0; gfx_a = 0.5;
+    gfx_rect(x-10, mouse_y - 3*texth - gfx_texth, textw+10, 3*texth + gfx_texth/2, 1);
+    gfx_r = gfx_g = gfx_b = 1; gfx_a = 0.15;
+    gfx_rect(x-10, mouse_y - 3*texth - gfx_texth, textw+10, 3*texth + gfx_texth/2, 0);
+
+    gfx_r = gfx_g = gfx_b = 1; gfx_a = 1;
+    gfx_x = x; gfx_y = mouse_y - 3*texth - gfx_texth/2;
+    plus ? (val >= 0 ? gfx_drawstr("+"));
+    gfx_drawnumber(val, precision); gfx_drawstr(unit);
+    gfx_x = x; gfx_y = mouse_y - 2*texth - gfx_texth/2;
+    gfx_drawnumber(frame * g_spf, 0); gfx_drawstr(" samples");
+    gfx_x = x; gfx_y = mouse_y - 1*texth - gfx_texth/2;
+    gfx_drawnumber(frame * g_spf / srate, 5); gfx_drawstr(" sec");
+
+    gfx_setfont(1,"Arial",fsz);
+  );
+);
+
+// Enable or disable graph data update
+function g_set_enabled(flag) ( g_enabled = flag; );
+
+function g_setfont() (  // for @gfx
+  fsz=FONT_SZ_MIN+min(gfx_w/100,FONT_SZ_MAX-FONT_SZ_MIN);
+  gfx_ext_retina > 1 ? fsz *= 1.5;
+  gfx_setfont(1,"Arial",fsz);
+);
+
+// }
+//////////////////////////////////////////////////////////////////////////
+
