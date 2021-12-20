@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="85e2de308897c46abcab11d325cfa6cbeb44e2d1">
+<index version="1" name="ERSH plugins and effects" commit="5822e82b8a5237e2eace27c28de0ff26749b9ef0">
   <category name="JSFX">
-    <reapack name="ersh_agc.jsfx" type="effect" desc="Automatic Gain Control (AGC), based on Loudness Meter Peak/RMS/LUFS (Cockos)">
+    <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control (AGC) by ERSH. Auto gain control by Peak, True Peak, RMS, LUFS.\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Automatic Gain Control (AGC) by ERSH, based on Loudness Meter Peak/RMS/LUFS (Cockos). Auto gain control (rider) by Peak, True Peak, RMS, LUFS.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Plugin uses lookahead window to watch for maximum gain in the signal and tries to keep the output gain below the specified level.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 If the input gain in not a real/true peak then the output can actually exceed 0dB level. For that case there is a peak limiter that use the same lookahead window and engages shortly before the prospective peak excess and compensates for that event.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 PDC Delay setting is to request plugin to report the lookahead window to Reaper so that the delay is automatically compensated. That however incurs additional CPU and Memory usage, that's why there is a setting to turn it on/off.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 Some settings are adjustable on the fly, some are not. Make sure to stop/start the playback to apply the changes.\par}
@@ -78,6 +78,22 @@ v1.2.0:
         <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
         <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
         <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/85e2de308897c46abcab11d325cfa6cbeb44e2d1/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
+      </version>
+      <version name="1.2.1" author="ERSH, Yury Ershov" time="2021-12-20T02:20:34Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes
+v1.2.0:
+* (internal) Use separate files for libraries
+v1.2.1:
+* Add presets]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc.jsfx</source>
+        <source file="ersh_agc-inc/ersh_alloc.jsfx-inc">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc-inc/ersh_alloc.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
+        <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
