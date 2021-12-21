@@ -6,6 +6,6 @@ https://youtu.be/twKTY5g27fE
 
 ## Automatic Gain Control (AGC)
 
-https://youtu.be/vmj6efE1AAE
+https://youtu.be/hPcTy4PMVwg
 
 ## Phase-corrected "Simple 1-Pole Filter" for better highpass filtering.
