@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="5822e82b8a5237e2eace27c28de0ff26749b9ef0">
+<index version="1" name="ERSH plugins and effects" commit="aad09972863b4c0d818638bda1e454300be738f2">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -95,6 +95,24 @@ v1.2.1:
         <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
         <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/5822e82b8a5237e2eace27c28de0ff26749b9ef0/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
+      <version name="1.2.2" author="ERSH, Yury Ershov" time="2021-12-30T21:11:31Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes
+v1.2.0:
+* (internal) Use separate files for libraries
+v1.2.1:
+* Add presets
+v1.2.2:
+* Correct initial gain value]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc.jsfx</source>
+        <source file="ersh_agc-inc/ersh_alloc.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_alloc.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
+        <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc.jsfx.rpl</source>
+      </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
       <metadata>
@@ -156,7 +174,7 @@ v2.1:
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Transient Controller mod\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/twKTY5g27fE\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Automatic Gain Control (AGC)\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/vmj6efE1AAE\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/hPcTy4PMVwg\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Phase-corrected "Simple 1-Pole Filter" for better highpass filtering.\par}
 }
 ]]></description>
