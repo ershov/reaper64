@@ -8,7 +8,7 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 IFS=$'\n'
 for dir in `find JSFX -name \*-inc -type d`; do
-  echo $'\n\nUpdating $dir...'
+  echo $'\n\nUpdating '"$dir..."
   rsync -auv --del --inplace --exclude=.DS_Store --delete-excluded JSFX-LIB/ "$dir"
 done
 

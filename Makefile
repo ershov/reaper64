@@ -1,3 +1,7 @@
+all:
+	./update-inc
+	./make_rpl_all
+
 diff: */*
 	git checkout -- index.xml
 	reapack-index --rebuild --no-commit
