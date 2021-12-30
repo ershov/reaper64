@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="aad09972863b4c0d818638bda1e454300be738f2">
+<index version="1" name="ERSH plugins and effects" commit="458c510673ae8c40e4cd68aef3c93954fa38a801">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -112,6 +112,24 @@ v1.2.2:
         <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
         <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
         <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/aad09972863b4c0d818638bda1e454300be738f2/JSFX/ersh_agc.jsfx.rpl</source>
+      </version>
+      <version name="1.2.3" author="ERSH, Yury Ershov" time="2021-12-30T21:19:00Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes
+v1.2.0:
+* (internal) Use separate files for libraries
+v1.2.1:
+* Add presets
+v1.2.2:
+* Correct initial gain value]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc.jsfx</source>
+        <source file="ersh_agc-inc/ersh_alloc.jsfx-inc">https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc-inc/ersh_alloc.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
+        <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/458c510673ae8c40e4cd68aef3c93954fa38a801/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
