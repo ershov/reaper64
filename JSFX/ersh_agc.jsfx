@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.2.1
+  Version: 1.2.2
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -36,6 +36,8 @@
     * (internal) Use separate files for libraries
     v1.2.1:
     * Add presets
+    v1.2.2:
+    * Correct initial gain value
 */
 
 // (C) 2021, Yury Ershov.
@@ -87,6 +89,9 @@ slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope (output)
 // TODO: options:maxmem=32000000 // __memtop()
 
 @init
+
+INF=150;
+_INF=-INF;
 
 alloc.__memtop = __memtop();
 
@@ -351,24 +356,24 @@ function Reset()
   i_win_len2=1/(s_win_cnt*win_len);
 
   rms_m_sum=0;
-  rms_m_db=-100;
-  rms_m_db_max=-100;
+  rms_m_db=-INF;
+  rms_m_db_max=-INF;
   rms_i_sum=0;
   rms_i_sum_cnt=0;
-  rms_i_db=-100;
+  rms_i_db=-INF;
 
   lufs_m_sum=0;
   lufs_m_sum_max=0;
-  lufs_m_db=-100;
+  lufs_m_db=-INF;
   lufs_s_sum=0;
   lufs_s_sum_max=0;
-  lufs_s_db=-100;
+  lufs_s_db=-INF;
   lufs_a_sum=0;
   lufs_a_sum_cnt=0;
   lufs_b_sum=0;
   lufs_b_sum_cnt=0;
   lra_db_diff = 0;
-  lra_db_hi = lra_db_lo = lufs_i_db = lufs_m_db = lufs_s_db = -100;
+  lra_db_hi = lra_db_lo = lufs_i_db = lufs_m_db = lufs_s_db = _INF;
 
   th_lufs_i=th_lufs_s=th_lufs_m=th_rms_i=th_rms_m=0;
 
@@ -408,6 +413,7 @@ function Reset()
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_gain = agc_max;
+  agc_input = agc_input_prev = _INF;
   agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
   agc_debug_spl0 = agc_debug_spl1 = agc_debug_spl0o = agc_debug_spl1o = 0;
   graph_range = max(abs(agc_min), abs(agc_max)) + abs(agc_to);
@@ -415,13 +421,13 @@ function Reset()
   g_init(500, agc_lookahead*2);
   g_memstart = alloc.top;
   graph_smpl.g_add_graph("Input Sample", 0,0.5,0,0.5, -1,1, 0, 3);
-  graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -graph_range,graph_range, -150, 2);
-  graph_inputenvmax.g_add_graph("Input Gain Max", 1,0.65,0,1, -graph_range,graph_range, -150, 2);
-  graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -graph_range,graph_range, -150, 2);
-  graph_agc.g_add_graph("AGC", 1,0,0,1, -graph_range,graph_range, -150, 0);
+  graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -graph_range,graph_range, _INF, 2);
+  graph_inputenvmax.g_add_graph("Input Gain Max", 1,0.65,0,1, -graph_range,graph_range, _INF, 2);
+  graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -graph_range,graph_range, _INF, 2);
+  graph_agc.g_add_graph("AGC", 1,0,0,1, -graph_range,graph_range, _INF, 0);
 
-  ///graph_peak_debug.g_add_graph("Peak Debug", 0.4,0,0,1, -graph_range,graph_range, -150, 2);
-  use_peak_limiter ? graph_peak.g_add_graph("Peak Limiter", 0.5,0,0.5,1, -graph_range,graph_range, -150, 2);
+  ///graph_peak_debug.g_add_graph("Peak Debug", 0.4,0,0,1, -graph_range,graph_range, _INF, 2);
+  use_peak_limiter ? graph_peak.g_add_graph("Peak Limiter", 0.5,0,0.5,1, -graph_range,graph_range, _INF, 2);
   agc_peak = agc_gain;
   agc_peak_release_db_sec = 1000;
   agc_peak_lookahead = srate*0.05;
@@ -541,7 +547,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
     rms_i_sum > 0 && rms_i_sum_cnt >= m_win_cnt ? (
       rms_i_db=log(rms_i_sum/rms_i_sum_cnt)*10/log(10);
     ) : (
-      rms_i_db=-100;
+      rms_i_db=_INF;
     );
   );
   
@@ -549,7 +555,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
     rms_m_db=log(rms_m_sum)*10/log(10);
     rms_m_db > rms_m_db_max ? rms_m_db_max=rms_m_db;
   ) : (
-    rms_m_db=-100;
+    rms_m_db=_INF;
   );
   
   lufs_m_sum > 0 && win_cnt >= m_win_cnt ? (
@@ -575,10 +581,10 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
         lufs_i_sum += lufs_a_hist[2*bin+1];
         bin += 1;
       );
-      lufs_i_db=lufs_i_sum > 0 ? -0.691+log(lufs_i_sum/lufs_i_cnt)*10/log(10) : -100;
+      lufs_i_db=lufs_i_sum > 0 ? -0.691+log(lufs_i_sum/lufs_i_cnt)*10/log(10) : _INF;
     );
   ) : (
-    lufs_m_db=-100;
+    lufs_m_db=_INF;
   );
 
   lufs_s_sum > 0 && win_cnt >= s_win_cnt ? (
@@ -623,15 +629,16 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
       );
     );
   ) : (
-    lufs_s_db=-100;
+    lufs_s_db=_INF;
   );
 );
 
 (play_state&1) ? (
   spl0_buf.rb_push(spl0);
   spl1_buf.rb_push(spl1);
-  global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/log(10) : -150);
+  global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/log(10) : _INF);
   use_peak_limiter ? agc_pbuf.maxwin_add(global_sample_peak_db);
+  agc_input_prev = agc_input;
   agc_input =
     agc_by == 0 || agc_by == 1 ? global_sample_peak_db : // Peak, True Peak
     agc_by == 2 ? (rms_m_db + (cfg_mono ? -3 : 0)) : // RMS-M
@@ -648,7 +655,9 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   agc_target_gain =  -agc_winmax + agc_to;
   agc_target_off = agc_buf.maxwin_off();
   agc_debug_gain_prev = agc_gain;
-  agc_gain = min(max(scale_gain(agc_gain, agc_target_gain, agc_target_off, agc_pre, agc_release_rate), agc_min), agc_max);
+  agc_gain = agc_input_prev > _INF ?
+    min(max(scale_gain(agc_gain, agc_target_gain, agc_target_off, agc_pre, agc_release_rate), agc_min), agc_max) :
+    agc_target_gain;  // Initialize with the "target" on first appearance of maningful value
   agc_debug_gain_diff = agc_gain - agc_debug_gain_prev;
   g_nextsample();
   graph_smpl.g_sample((spl0+spl1)/2);
@@ -667,12 +676,11 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
                                     -agc_peak_max,
                                   agc_peak_off, agc_peak_pre, agc_peak_release_db_sec), agc_min), agc_max);
     agc_and_peak_gain = min(agc_peak, agc_gain);
-    graph_peak.g_sample(engage_limiter ? -150 : -agc_peak);
+    graph_peak.g_sample(engage_limiter ? _INF : -agc_peak);
     //graph_peak.g_sample(-agc_peak); // for debug
     //graph_peak.g_sample(global_sample_peak_db);
     //graph_peak.g_sample(agc_pbuf.maxwin_max());
     ///graph_peak_debug.g_sample(global_sample_peak_db);
-  
   ) : (
     agc_and_peak_gain = agc_gain;
   );
