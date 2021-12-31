@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.2.3
+  Version: 1.2.4
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -38,6 +38,8 @@
     * Add presets
     v1.2.2:
     * Correct initial gain value
+    v1.2.4:
+    * Correct "long" modes (RMS, LUFS) lookahead.
 */
 
 // (C) 2021, Yury Ershov.
@@ -346,14 +348,16 @@ function Reset()
   hipk=alloc(REAPER_MAX_CHANNELS);
   clip_cnt=alloc(REAPER_MAX_CHANNELS);
 
-  m_win_cnt=0.4/LOUD_METER_UPDATE;
-  s_win_cnt=3/LOUD_METER_UPDATE;
+  m_win_sec=0.4;
+  m_win_cnt=m_win_sec/LOUD_METER_UPDATE;
+  s_win_sec=3;
+  s_win_cnt=s_win_sec/LOUD_METER_UPDATE;
 
   win_pos=0;
   win_cnt=0;
   win_len=(LOUD_METER_UPDATE*srate)|0;
   i_win_len=1/(m_win_cnt*win_len);
-  i_win_len2=1/(s_win_cnt*win_len);
+  s_win_len=1/(s_win_cnt*win_len);
 
   rms_m_sum=0;
   rms_m_db=-INF;
@@ -404,9 +408,17 @@ function Reset()
   num_ch > 56 ? ( ch56.init(56); ch57.init(57); ch58.init(58); ch59.init(59); ch60.init(60); ch61.init(61); ch62.init(62); ch63.init(63);
   ))))))))))));
 
+  MAX_MODES = 20;
+  //mode_delay_sec = alloc(MAX_MODES);
+  mode_delay = alloc(MAX_MODES);
+  mode_delay[0] = mode_delay[1] = 0;  // Peak
+  mode_delay[2] = mode_delay[3] = mode_delay[4] = mode_delay[6] = ((m_win_cnt+0.1)*win_len/2)|0;
+  mode_delay[5] = ((s_win_cnt+0.1)*win_len/2)|0;
+  mode_delay[7] = 0;  // LRA
+
   use_peak_limiter = (agc_by > 1 && cfg_use_peak_limiter);
 
-  agc_lookahead_sz = agc_lookahead * srate;
+  agc_lookahead_sz = max((agc_lookahead * srate)|0, mode_delay[agc_by]*2+4);
   pdc_delay = (use_pdc_delay ? agc_lookahead_sz : 0);
   agc_buf.maxwin_init(agc_lookahead_sz);
   use_peak_limiter ? agc_pbuf.maxwin_init(agc_lookahead_sz);
@@ -414,11 +426,12 @@ function Reset()
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_gain = agc_max;
   agc_input = agc_input_prev = _INF;
-  agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
+  //agc_pre = agc_by < 2 ? srate/10 : srate*0.5;
+  agc_pre = mode_delay[agc_by]+1;
   agc_debug_spl0 = agc_debug_spl1 = agc_debug_spl0o = agc_debug_spl1o = 0;
   graph_range = max(abs(agc_min), abs(agc_max)) + abs(agc_to);
 
-  g_init(500, agc_lookahead*2);
+  g_init(500, 2*agc_lookahead_sz/srate);
   g_memstart = alloc.top;
   graph_smpl.g_add_graph("Input Sample", 0,0.5,0,0.5, -1,1, 0, 3);
   graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -graph_range,graph_range, _INF, 2);
@@ -539,7 +552,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
 
   rms_m_sum += (rval-prev_rval)*i_win_len;
   lufs_m_sum += (lval-prev_lval)*i_win_len;
-  lufs_s_sum += (lval-prev_lval2)*i_win_len2;
+  lufs_s_sum += (lval-prev_lval2)*s_win_len;
   
   WANT_INTEGRATED_ALWAYS || (play_state&1) ? (
     rms_i_sum += rms_m_sum;
