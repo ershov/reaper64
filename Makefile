@@ -1,4 +1,12 @@
 all:
+	echo "Make targets:"
+	echo "  update - update includes, update presets"
+	echo "  diff   - display index.xml diff"
+	echo "  commit - commit changes to index.xml and display diff"
+	echo "  reset  - reset index.xml"
+	echo "  amend  - amend last commit with changes in */*"
+
+update:
 	./update-inc
 	./make_rpl_all
 
