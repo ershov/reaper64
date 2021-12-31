@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.2.4
+  Version: 1.2.5
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -40,6 +40,8 @@
     * Correct initial gain value
     v1.2.4:
     * Correct "long" modes (RMS, LUFS) lookahead.
+    v1.2.5:
+    * Add "Reset" button
 */
 
 // (C) 2021, Yury Ershov.
@@ -445,11 +447,32 @@ function Reset()
   agc_peak_release_db_sec = 1000;
   agc_peak_lookahead = srate*0.05;
   agc_peak_pre = agc_peak_lookahead/5;
+
+  unapplied_settings = 0;
+  agc_by_orig = agc_by;
+  agc_to_orig = agc_to;
+  agc_lookahead_orig = agc_lookahead;
+  agc_release_rate_orig = agc_release_rate;
+  agc_min_orig = agc_min;
+  agc_max_orig = agc_max;
+  cfg_use_peak_limiter_orig = cfg_use_peak_limiter;
+  use_pdc_delay_orig = use_pdc_delay;
 );
 
 Reset();
 
 @slider
+
+(
+  (agc_by_orig != agc_by) ||
+  //(agc_to_orig != agc_to) ||
+  (agc_lookahead_orig != agc_lookahead) ||
+  //(agc_release_rate_orig != agc_release_rate) ||
+  //(agc_min_orig != agc_min) ||
+  //(agc_max_orig != agc_max) ||
+  (cfg_use_peak_limiter_orig != cfg_use_peak_limiter) ||
+  (use_pdc_delay_orig != use_pdc_delay)
+) ? (unapplied_settings = 1);
 
 //Reset();  // this would reset on output automation
 
@@ -749,7 +772,7 @@ yu=gfx_texth*7/8;
 yt = (gfx_h-yu*3.5+yu)|0;
 ylo=gfx_h-yu;
 
-has_click = (mouse_cap&1) && !(last_cap&1) ? 1 : 0;
+has_click = (mouse_cap&1) && !(last_cap&1);
 last_cap=mouse_cap;
 
 function gfx_bar(x1, y1, x2, y2) local(t) (
@@ -832,7 +855,20 @@ loop(agc_buf.dq.dq_size(),
     has_click=0;
   );
 );
-
+(
+  gfx_measurestr("Reset", x, y);
+  x = gfx_w - x;
+  mouse_in = (mouse_x >= x && mouse_x < gfx_w && mouse_y >= 0 && mouse_y <= y);
+  set_color(unapplied_settings ? (mouse_in ? $xFF8080 : $xFF0000) : (mouse_in ? $x80FF80 : $x008000));
+  gfx_rect(x, 0, gfx_w, y);
+  set_color($x000000);
+  gfx_x = x; gfx_y = 0;
+  gfx_drawstr("Reset");
+  has_click && mouse_in ? (
+    Reset();
+    has_click = 0;
+  );
+);
 //has_click ? Reset();
 
 
