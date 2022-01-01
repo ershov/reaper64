@@ -283,13 +283,13 @@ function init_lufs_filters()
 );
 
 // Sliding max window // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
-function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
+function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); this.sz = sz; );
 function maxwin_max() ( this.buf.rb_get_at(this.dq.dq_front()); );
-function maxwin_off() ( this.dq.dq_front() - this.buf.head + agc_lookahead_sz; );
+function maxwin_off() ( this.dq.dq_front() - this.buf.head + this.sz; );
 function maxwin_tail_gain() ( this.buf.rb_get_tail(); );
 function maxwin_add(gain, cur_envelope_gain) local (winstart pos dpos gain_angle gain2) (
   // Remove the elements which are out of window
-  winstart = this.buf.head - agc_lookahead_sz;
+  winstart = this.buf.head - this.sz;
   while (!this.dq.dq_empty() && this.dq.dq_front() <= winstart) (
     this.dq.dq_pop_front();
   );
@@ -309,7 +309,7 @@ function maxwin_add(gain, cur_envelope_gain) local (winstart pos dpos gain_angle
     );
   ) : (
     // If the slope is going up, keep the closer but steeper edges
-    gain_angle = (gain-cur_envelope_gain) / (agc_lookahead_sz+1);  // TODO: use specific preview window for this since peak limiter uses a different value
+    gain_angle = (gain-cur_envelope_gain) / (this.sz+1);
     while (!this.dq.dq_empty() && (
               dpos = (pos=this.dq.dq_back())-winstart;
               gain2 = this.buf.rb_get_at(pos);
@@ -421,11 +421,16 @@ function Reset()
   mode_delay[7] = 0;  // LRA
 
   use_peak_limiter = (agc_by > 1 && cfg_use_peak_limiter);
+  agc_peak_release_db_sec = 1000;
+  agc_peak_lookahead_sz = srate*0.05;
+  agc_peak_pre = agc_peak_lookahead_sz/5;
 
   agc_lookahead_sz = max((agc_lookahead * srate)|0, mode_delay[agc_by]*2+4);
+  use_peak_limiter ? agc_lookahead_sz = max(agc_lookahead_sz, agc_peak_lookahead_sz);
   pdc_delay = (use_pdc_delay ? agc_lookahead_sz : 0);
   agc_buf.maxwin_init(agc_lookahead_sz);
-  use_peak_limiter ? agc_pbuf.maxwin_init(agc_lookahead_sz);
+  use_peak_limiter ? agc_pbuf_delay.rb_init(max(1, agc_lookahead_sz - agc_peak_lookahead_sz + 1));  // delay samples before putting them into peak's maxwin
+  use_peak_limiter ? agc_pbuf.maxwin_init(agc_peak_lookahead_sz);
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_envelope_gain = agc_min;  // Never used anyway
@@ -448,9 +453,6 @@ function Reset()
   use_peak_limiter ? graph_peak.g_add_graph("Peak Limiter", 0.5,0,0.5,1, -graph_range,graph_range, _INF, 2);
   agc_envelope_pgain = agc_envelope_gain;
   agc_output_pgain = agc_output_gain;          // Never used anyway
-  agc_peak_release_db_sec = 1000;
-  agc_peak_lookahead = srate*0.05;
-  agc_peak_pre = agc_peak_lookahead/5;
 
   unapplied_settings = 0;
   agc_by_orig = agc_by;
@@ -677,7 +679,6 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   spl0_buf.rb_push(spl0);
   spl1_buf.rb_push(spl1);
   global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/LOG10 : _INF);
-  use_peak_limiter ? agc_pbuf.maxwin_add(global_sample_peak_db, agc_envelope_gain);  // use general envelope for this purpose
   agc_input_prev = agc_input;
   agc_input =
     agc_by == 0 || agc_by == 1 ? global_sample_peak_db : // Peak, True Peak
@@ -706,9 +707,12 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   graph_input.g_sample(agc_input);
 
   use_peak_limiter ? (
+    agc_pbuf_delay.rb_push(global_sample_peak_db);
+    agc_pbuf.maxwin_add(agc_pbuf_delay.rb_get_tail(), agc_envelope_gain);  // use general envelope for this purpose
+
     agc_peak_off = agc_pbuf.maxwin_off();
     agc_peak_max = agc_pbuf.maxwin_max();
-    engage_limiter = (agc_peak_max+agc_output_gain > 0) && (agc_peak_off <= agc_peak_lookahead);
+    engage_limiter = (agc_peak_max+agc_output_gain > 0);
     agc_envelope_pgain =
       mutate_gain_envelope(agc_envelope_pgain,
                          engage_limiter ? agc_peak_max : agc_envelope_gain,
@@ -822,7 +826,7 @@ PEAK_DEBUG && use_peak_limiter ? (
   gfx_circle((agc_peak_off)/agc_lookahead_sz * gfx_w/2 + gfx_w/2, agc_y(agc_peak_max), 5);
   i = 0;
   loop(agc_pbuf.dq.dq_size(),
-    x = (agc_pbuf.dq.dq_nfront(i) - agc_pbuf.buf.head + agc_lookahead_sz)/agc_lookahead_sz * gfx_w/2 + gfx_w/2;
+    x = (agc_pbuf.dq.dq_nfront(i) - agc_pbuf.buf.head + agc_peak_lookahead_sz)/agc_lookahead_sz * gfx_w/2 + gfx_w/2;
     y = agc_pbuf.buf.rb_get_at(agc_pbuf.dq.dq_nfront(i));
     gfx_circle(x, agc_y(y), 2);
     gfx_line(x, agc_y(y), x, agc_y(y + agc_output_gain));
