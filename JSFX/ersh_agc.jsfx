@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.2.5
+  Version: 1.3.0
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -42,6 +42,9 @@
     * Correct "long" modes (RMS, LUFS) lookahead.
     v1.2.5:
     * Add "Reset" button
+    v1.3.0:
+    * Improvements to peak limiter
+    * Added a "Limiter" preset
 */
 
 // (C) 2021, Yury Ershov.
