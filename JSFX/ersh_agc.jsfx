@@ -60,10 +60,11 @@ desc: AGC - Automatic Gain Control
 preset:"Normal" 4 -18 5 1 -50 50 1 1
 preset:"Medium" 4 -18 3 4 -50 50 1 1
 preset:"Extreme" 0 -10 0.1 100 -100 100 1 1
+preset:"Limiter" 0 0 0.05 1000 -50 0 0 1
 
 slider1:agc_by=4<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
 slider2:agc_to=-18<-100,0,0.01>AGC Output level (in units above)
-slider3:agc_lookahead=5<0.6,30,0.001>AGC Lookahead, sec
+slider3:agc_lookahead=5<0,30,0.001>AGC Lookahead, sec
 slider4:agc_release_rate=1<1,20,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
@@ -93,6 +94,8 @@ slider39:outparm_agc_envelope=-100<-100,0,1>-AGC Envelope (output)
 // TODO: options:maxmem=32000000 // __memtop()
 
 @init
+
+PEAK_DEBUG=0;
 
 INF=150;
 _INF=-INF;
@@ -284,7 +287,7 @@ function maxwin_init(sz) ( this.buf.rb_init(sz); this.dq.dq_init(sz); );
 function maxwin_max() ( this.buf.rb_get_at(this.dq.dq_front()); );
 function maxwin_off() ( this.dq.dq_front() - this.buf.head + agc_lookahead_sz; );
 function maxwin_tail_gain() ( this.buf.rb_get_tail(); );
-function maxwin_add(gain) local (winstart pos dpos gain_angle gain2) (
+function maxwin_add(gain, cur_envelope_gain) local (winstart pos dpos gain_angle gain2) (
   // Remove the elements which are out of window
   winstart = this.buf.head - agc_lookahead_sz;
   while (!this.dq.dq_empty() && this.dq.dq_front() <= winstart) (
@@ -299,20 +302,20 @@ function maxwin_add(gain) local (winstart pos dpos gain_angle gain2) (
   this.dq.dq_pop_back();
 
   // Remove all elements smaller than the currently being added element (remove useless elements)
-  (agc_envelope_gain >= gain || this.maxwin_max() >= gain) ? (
+  (cur_envelope_gain >= gain || this.maxwin_max() >= gain) ? (
     // If the slope is going down, just mark the peaks
     while (!this.dq.dq_empty() && gain >= this.buf.rb_get_at(this.dq.dq_back())) (
       this.dq.dq_pop_back();
     );
   ) : (
     // If the slope is going up, keep the closer but steeper edges
-    gain_angle = (gain-agc_envelope_gain) / (agc_lookahead_sz+1);  // TODO: use specific preview window for this since peak limiter uses a different value
+    gain_angle = (gain-cur_envelope_gain) / (agc_lookahead_sz+1);  // TODO: use specific preview window for this since peak limiter uses a different value
     while (!this.dq.dq_empty() && (
               dpos = (pos=this.dq.dq_back())-winstart;
               gain2 = this.buf.rb_get_at(pos);
               //Keep the ones that are equal! vv
               (dpos > agc_pre) &&
-              (gain_angle > (gain2 - agc_envelope_gain)/dpos))) (
+              (gain_angle > (gain2 - cur_envelope_gain)/dpos))) (
       this.dq.dq_pop_back();
     );
     // If the slope is going up, mark both sides of "platos", skipping the middle
@@ -440,7 +443,8 @@ function Reset()
   graph_input.g_add_graph("Input Gain", 0,0.7,1,1, -graph_range,graph_range, _INF, 2);
   graph_agc.g_add_graph("AGC", 1,0,0,1, -graph_range,graph_range, _INF, 0);
 
-  ///graph_peak_debug.g_add_graph("Peak Debug", 0.4,0,0,1, -graph_range,graph_range, _INF, 2);
+  PEAK_DEBUG ? graph_peak_debug.g_add_graph("Peak Debug", 0.4,0,0,1, -graph_range,graph_range, _INF, 2);
+  PEAK_DEBUG ? graph_peak_debug2.g_add_graph("Output Debug", 0.4,0.5,0,1, -graph_range,graph_range, _INF, 2);
   use_peak_limiter ? graph_peak.g_add_graph("Peak Limiter", 0.5,0,0.5,1, -graph_range,graph_range, _INF, 2);
   agc_envelope_pgain = agc_envelope_gain;
   agc_output_pgain = agc_output_gain;          // Never used anyway
@@ -673,7 +677,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   spl0_buf.rb_push(spl0);
   spl1_buf.rb_push(spl1);
   global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/LOG10 : _INF);
-  use_peak_limiter ? agc_pbuf.maxwin_add(global_sample_peak_db);
+  use_peak_limiter ? agc_pbuf.maxwin_add(global_sample_peak_db, agc_envelope_gain);  // use general envelope for this purpose
   agc_input_prev = agc_input;
   agc_input =
     agc_by == 0 || agc_by == 1 ? global_sample_peak_db : // Peak, True Peak
@@ -684,7 +688,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
     agc_by == 6 ? (lufs_i_db + (cfg_mono ? -3 : 0)) : // LUFS-I
     agc_by == 7 ? lra_db_diff : // LUFS-LRA
     0;
-  agc_buf.maxwin_add(agc_input);
+  agc_buf.maxwin_add(agc_input, agc_envelope_gain);
   agc_debug_dq_sz = agc_buf.dq.dq_size();
 
   agc_winmax = agc_buf.maxwin_max();
@@ -711,11 +715,11 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
                          agc_peak_off, agc_peak_pre, agc_peak_release_db_sec);
     agc_output_pgain = min(max(-agc_envelope_pgain, agc_min), agc_max);
     agc_or_peak_output_gain = min(agc_output_pgain, agc_output_gain);
-    graph_peak.g_sample(engage_limiter ? -agc_output_pgain : _INF);
+    graph_peak.g_sample(agc_output_pgain < agc_output_gain ? -agc_output_pgain : _INF);
     //graph_peak.g_sample(-agc_output_pgain); // for debug
     //graph_peak.g_sample(global_sample_peak_db);
     //graph_peak.g_sample(agc_pbuf.maxwin_max());
-    ///graph_peak_debug.g_sample(global_sample_peak_db);
+    PEAK_DEBUG ? graph_peak_debug.g_sample(global_sample_peak_db);
   ) : (
     agc_or_peak_output_gain = agc_output_gain;
   );
@@ -725,6 +729,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
 
   spl0 = spl0_buf.rb_get_tail() * agc_spl_scale;
   spl1 = spl1_buf.rb_get_tail() * agc_spl_scale;
+  PEAK_DEBUG ? (debug_peak = max(abs(spl0), abs(spl1)); graph_peak_debug2.g_sample((debug_peak > 0 ? log(debug_peak)*20/LOG10 : _INF)); );
 );
 
 @gfx 800 320
@@ -794,14 +799,16 @@ graph_inputenv.g_paint2(-gfx_w/2);
 graph_input.g_paint2();
 graph_agc.g_paint2(-gfx_w/2);
 use_peak_limiter ? graph_peak.g_paint2(-gfx_w/2);
-///graph_peak_debug.g_paint2();
+PEAK_DEBUG ? graph_peak_debug.g_paint2();
+PEAK_DEBUG ? graph_peak_debug2.g_paint2(-gfx_w/2);
 
 set_color($xFF0000);
 gfx_bar(x-20, agc_y(0), x+20, agc_y(agc_output_gain));
 set_color($x80C0C0);
-gfx_bar(x-4, agc_y(0), x+4, agc_y(agc_target_gain));
+y = agc_y(-agc_target_gain + agc_to);
+gfx_bar(x-4, agc_y(0), x+4, y);
 gfx_a = 0.6;
-gfx_line(x, agc_y(agc_target_gain), (agc_buf.dq.dq_front() - agc_pre - agc_buf.buf.head + agc_lookahead_sz)/agc_lookahead_sz * gfx_w/2 + gfx_w/2, agc_y(agc_target_gain));
+gfx_line(x, y, (agc_buf.dq.dq_front() - agc_pre - agc_buf.buf.head + agc_lookahead_sz)/agc_lookahead_sz * gfx_w/2 + gfx_w/2, y);
 //gfx_triangle(x-5, agc_y(agc_target_gain*0.7), x+5, agc_y(agc_target_gain*0.7), x, agc_y(agc_target_gain));
 set_color($xFFFFFF);
 gfx_setfont(1,"Arial",fsz, $'b');
@@ -809,6 +816,20 @@ gfx_x = x+20; gfx_y = agc_y(agc_output_gain) - gfx_texth/2;
 agc_output_gain >= 0 ? gfx_drawstr("+");
 gfx_drawnumber(agc_output_gain, 2);
 gfx_drawstr("dB");
+
+PEAK_DEBUG && use_peak_limiter ? (
+  set_color($xff00ff);
+  gfx_circle((agc_peak_off)/agc_lookahead_sz * gfx_w/2 + gfx_w/2, agc_y(agc_peak_max), 5);
+  i = 0;
+  loop(agc_pbuf.dq.dq_size(),
+    x = (agc_pbuf.dq.dq_nfront(i) - agc_pbuf.buf.head + agc_lookahead_sz)/agc_lookahead_sz * gfx_w/2 + gfx_w/2;
+    y = agc_pbuf.buf.rb_get_at(agc_pbuf.dq.dq_nfront(i));
+    gfx_circle(x, agc_y(y), 2);
+    gfx_line(x, agc_y(y), x, agc_y(y + agc_output_gain));
+    (y + agc_output_gain > 0) ? gfx_line3(x, agc_y(0), x, agc_y(y + agc_output_gain));
+    i += 1;
+  );
+);
 
 gfx_x = agc_target_off/agc_lookahead_sz * gfx_w/2 + gfx_w/2;
 gfx_y = agc_y(agc_winmax) - gfx_texth;
