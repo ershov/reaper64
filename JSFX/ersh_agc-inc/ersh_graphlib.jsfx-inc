@@ -103,6 +103,8 @@ function g_init(framerate, seconds_x) (
   g_idx = 0;                       // current sample offset in array
   g_subsample = 0;                 // sample number within the frame: 0 ... g_spf
   g_enabled = 1;
+  g_idxfrom = 0;
+  g_idxto = g_maxx;
 );
 
 // Call this function in @init to add graph.
