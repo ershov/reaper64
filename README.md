@@ -8,4 +8,6 @@ https://youtu.be/twKTY5g27fE
 
 https://youtu.be/hPcTy4PMVwg
 
+https://youtu.be/fb0ikjAVGkQ
+
 ## Phase-corrected "Simple 1-Pole Filter" for better highpass filtering.
