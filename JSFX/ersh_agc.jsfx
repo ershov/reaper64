@@ -447,7 +447,7 @@ function Reset()
   agc_pre = mode_delay[agc_by]+1;
   graph_range = max(abs(agc_min), abs(agc_max)) + abs(agc_to);
 
-  g_init(500, 2*agc_lookahead_sz/srate);
+  g_init(max(500, 500*4*srate/agc_lookahead_sz), 2*agc_lookahead_sz/srate);
   g_memstart = alloc.top;
   graph_smpl.g_add_graph("Input Sample", 0,0.5,0,0.5, -1,1, 0, 3);
   graph_inputenv.g_add_graph("Input Gain Envelope", 1,1,0.5,1, -graph_range,graph_range, _INF, 2);

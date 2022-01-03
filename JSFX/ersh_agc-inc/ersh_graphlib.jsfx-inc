@@ -95,11 +95,11 @@ function g_init(framerate, seconds_x) (
   g_ngraph = 0;                    // number of graphs
   g_ndata = 0;                     // number of graph data arrays
   g_framerate =
-    framerate >= 1 ? framerate :
+    framerate >= 1 ? min(framerate, srate) :
     framerate <= -1 ? (srate / -framerate) :
     srate;
-  g_maxx = g_framerate * seconds_x;  // number of dots on axis X
-  g_spf = floor(max(srate / g_framerate, 1));     // samples per frame
+  g_maxx = (g_framerate * seconds_x)|0;   // number of dots on axis X
+  g_spf = max(srate / g_framerate, 1)|0;  // samples per frame
   g_idx = 0;                       // current sample offset in array
   g_subsample = 0;                 // sample number within the frame: 0 ... g_spf
   g_enabled = 1;
@@ -124,6 +124,7 @@ function g_init(framerate, seconds_x) (
 //     2: use max
 //     3: use both min and max
 function g_add_graph(title, r, g, b, a, val_min, val_max, val_default, sample_mode) (
+  (g_spf <= 1) ? (sample_mode = 0);
   this.idx = g_ngraph;
   this.data2 = this.data1 = g_memstart + g_maxx * g_ndata;
   this.title = title;
