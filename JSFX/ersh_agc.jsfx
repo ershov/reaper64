@@ -433,8 +433,11 @@ function Reset()
   use_peak_limiter ? agc_lookahead_sz = max(agc_lookahead_sz, agc_peak_lookahead_sz);
   pdc_delay = (use_pdc_delay ? agc_lookahead_sz : 0);
   agc_buf.maxwin_init(agc_lookahead_sz);
-  use_peak_limiter ? agc_pbuf_delay.rb_init(max(1, agc_lookahead_sz - agc_peak_lookahead_sz + 1));  // delay samples before putting them into peak's maxwin
-  use_peak_limiter ? agc_pbuf.maxwin_init(agc_peak_lookahead_sz);
+  use_peak_limiter ? (
+    agc_pbuf_delay.rb_init(max(1, agc_lookahead_sz - agc_peak_lookahead_sz + 1));  // delay samples before putting them into peak's maxwin
+    memset(agc_pbuf_delay.buf, _INF, agc_pbuf_delay.sz);
+    agc_pbuf.maxwin_init(agc_peak_lookahead_sz);
+  );
   spl0_buf.rb_init(agc_lookahead_sz);
   spl1_buf.rb_init(agc_lookahead_sz);
   agc_envelope_gain = agc_min;  // Never used anyway
