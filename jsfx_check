@@ -1,0 +1,13 @@
+#!/bin/bash
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+for f in "$@"; do
+  (
+    echo
+    echo "    Checking $f ..."
+    cd "$(dirname "$f")" 2>&1 || { echo "Can't chdir to $(dirname $f)"; exit; };
+    "$SCRIPT_DIR/jsfx_check.pl" "$(basename "$f")"
+  )
+done
+
