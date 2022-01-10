@@ -80,6 +80,18 @@ my %functions = (
   midirecv => {
     name => "midirecv", pos => ["internal", 0, 0], args => [qw/offset msg1 msg2 msg3/], byref => [qw/offset msg1 msg2 msg3/], objrefs => [qw/offset msg1 msg2 msg3/], objinit => [qw/offset msg1 msg2 msg3/],
   },
+  midirecv_str => {
+    name => "midirecv_str", pos => ["internal", 0, 0], args => [qw/offset string/], byref => [qw/offset string/], objrefs => [qw/offset string/], objinit => [qw/offset string/],
+  },
+  midirecv_buf => {
+    name => "midirecv_buf", pos => ["internal", 0, 0], args => [qw/offset buf maxlen/], byref => [qw/offset/], objrefs => [qw/offset/], objinit => [qw/offset/],
+  },
+  time => {
+    name => "time", pos => ["internal", 0, 0], args => [qw/v/], byref => [qw/v/], objrefs => [qw/v/], objinit => [qw/v/],
+  },
+  time_precise => {
+    name => "time_precise", pos => ["internal", 0, 0], args => [qw/v/], byref => [qw/v/], objrefs => [qw/v/], objinit => [qw/v/],
+  },
   file_var => {
     name => "file_var", pos => ["internal", 0, 0], args => [qw/handle variable/], byref => [qw/variable/], objrefs => [qw/variable/], objinit => [qw/variable/],
   },
