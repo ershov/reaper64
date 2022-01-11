@@ -187,21 +187,23 @@ sub NormalizeThis($) {
   }
   return $var;
 }
-sub AddGlobalVar($) {
+sub AddGlobalVar($;$) {
   my $var = $_[0];
+  my $count = $_[1] || 1;
   do {
-    push @{$vars{$var}}, [filename(), $lineno, $linepos];
+    for (1 .. $count) { push @{$vars{$var}}, [filename(), $lineno, $linepos]; }
   } while ($var =~ s/\.[^.]*$//);   # use all parent objects too
 }
-sub AddVar($) {
+sub AddVar($;$) {
   my $var = shift;
+  my $count = shift || 1;
   return if exists $specialvars{$var};   # this also drops bare 'this'
 
   if ($var =~ m{^($identifier)\.}) {
     my $obj = $1;
     if ($obj eq 'this' || in($obj, @funcargsbyref)) {
       print filename().":$lineno:$linepos: object ref use <$obj>\n" if $DEBUG;
-      $funcobjrefs{$var}++;
+      $funcobjrefs{$var} += $count;
       $obj eq 'this' and !$funcname and Warn "Use of 'this' outside of function.";
       $obj ne 'this' and push @{$funclocalvars{$obj}}, [filename(), $lineno, $linepos];  # mark usage of function arg
       return;
@@ -210,16 +212,16 @@ sub AddVar($) {
 
   if (in($var, @funclocalvars) || in($var, @funcargs)) {
     print "= local var: <$var>\n" if $DEBUG;
-    push @{$funclocalvars{$var}}, [filename(), $lineno, $linepos];
+    for (1 .. $count) { push @{$funclocalvars{$var}}, [filename(), $lineno, $linepos]; }
   } else {
     if ($funcname && !in($var, @funcglobalvars)) {
       #Warn "'$var': Global variable not listed in 'global' list.";
       print "= implicit global var: <$var>\n" if $DEBUG;
-      $funcimplicitglobalvars{$var}++;
+      $funcimplicitglobalvars{$var} += $count;
     } else {
       print "= global var: <$var>\n" if $DEBUG;
     }
-    AddGlobalVar($var);
+    AddGlobalVar($var, $count);
   }
 }
 
@@ -290,7 +292,7 @@ sub ParseIntro() {
     if ($token eq 'slider') {
       if ($val =~ m{[^:]+:($identifier)=}) {
         my $var = $1;
-        AddVar($var); AddVar($var);  # never warn about single usage
+        AddVar($var, 2);   # never warn about single usage
         AddVarInit($var);
       }
     } elsif ($token eq 'import') {
@@ -565,7 +567,7 @@ sub TraceFuncall {
     if (exists $namedrefs{$obj}) {
       my $var = JoinIdentifier($namedrefs{$obj}, $field);
       print "".("  "x$trace_funcall_depth)."...($trace_funcall_depth) Use var by ref in '$func': $varref => $var\n" if $DEBUG;
-      $trace_funcall_depth ? AddGlobalVar($var) : AddVar($var);
+      $trace_funcall_depth ? AddGlobalVar($var, 2) : AddVar($var, 2);   # don't know how many times this is used
     } else {
       $unresolvedvars{$obj} = 1;
     }
