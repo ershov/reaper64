@@ -411,7 +411,7 @@ sub ParseFunction() {
   $funclevel = $level;
   print filename().":$lineno:$linepos:".pos().":($level): function $funcname(@funcargs) local(@funclocalvars) global(@funcglobalvars) instance(@funcinstancevars) refs(@funcargsbyref):\n" if $DEBUG;
 
-  exists $functions{$funcname} and Warn "Function '$funcname' redefenition: previously was defined here: ".join ":", @{$functions{$funcname}->{pos}};
+  exists $functions{$funcname} and Warn "Function '$funcname' redefinition: previously was defined here: ".join ":", @{$functions{$funcname}->{pos}};
 }
 
 sub OnEndOfFunction() {
