@@ -1,5 +1,11 @@
 #!/usr/bin/perl -w
 
+# TODO: all identifiers are case insensitive
+# TODO: functions "overload" by number of args (but 0 and 1 args are the same)
+# TODO: section-local functions
+# TODO: import paths are relative to the current file
+# TODO: global() and globals() are hiding global vars that are not listed
+
 use warnings;
 use strict;
 use v5.12.0;
@@ -403,7 +409,7 @@ sub ParseFunction() {
     } :
     $id eq "local" ? @funclocalvars = @args :
     $id eq "global" || $id eq "globals" ? @funcglobalvars = @args :  # 'globals' is invalid but it's used in a lot of Cockos' files
-    $id eq "instance" ? @funcinstancevars = @args :
+    $id eq "instance" $id eq "static" ? @funcinstancevars = @args :
     Warn "Function syntax error: unknown modifier '$id'.";
   }
   Pos();
