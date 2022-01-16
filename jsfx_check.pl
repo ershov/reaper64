@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 
 # TODO: all identifiers are case insensitive
+# TODO: add number parsing so that "." is not treated as member access
+# TODO: fix "unused" warning for variables-by-reference
 # TODO: functions "overload" by number of args (but 0 and 1 args are the same)
 # TODO: section-local functions
 # TODO: import paths are relative to the current file
