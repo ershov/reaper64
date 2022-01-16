@@ -408,8 +408,8 @@ sub ParseFunction() {
       @funcargs = @args;
     } :
     $id eq "local" ? @funclocalvars = @args :
-    $id eq "global" || $id eq "globals" ? @funcglobalvars = @args :  # 'globals' is invalid but it's used in a lot of Cockos' files
-    $id eq "instance" $id eq "static" ? @funcinstancevars = @args :
+    $id eq "global"   || $id eq "globals" ? @funcglobalvars = @args :  # 'globals' is invalid but it's used in a lot of Cockos' files
+    $id eq "instance" || $id eq "static"  ? @funcinstancevars = @args :
     Warn "Function syntax error: unknown modifier '$id'.";
   }
   Pos();
