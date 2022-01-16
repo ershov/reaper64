@@ -47,7 +47,7 @@ my %specialvars = map { ($_, 1) } (
   (map {"reg$_"} (10..99)),
   # _global* ?
   qw/this
-     pi
+     pi e phi
      gmem
      trigger srate num_ch samplesblock tempo play_state play_position beat_position
      ts_num ts_denom ext_noinit ext_nodenorm pdc_delay pdc_bot_ch pdc_top_ch pdc_midi
