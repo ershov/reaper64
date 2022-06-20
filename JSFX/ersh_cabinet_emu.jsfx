@@ -1,0 +1,345 @@
+/**
+  JSFX Name: Waveshaping Overloaded Cabinet Emulator
+  Author: ERSH, Yury Ershov
+  Licence: LGPL
+  REAPER: 6.0
+  Version: 1.0.0
+  Tags: processing distortion waveshaper modeller
+  Provides:
+    ersh_cabinet_emu.jsfx.rpl
+  About:
+    Waveshaping Overloaded cabinet speaker emulator.
+
+    Math model of single speaker cabinet.
+  Screenshot: (imgur)
+  Link: https://github.com/ershov/reaper64
+  Link: (youtube)
+  Changelog:
+    v1.0:
+    * Initial release
+*/
+
+// (C) 2022, Yury Ershov.
+// License: LGPL - http://www.gnu.org/licenses/lgpl.html
+
+desc: Waveshaping Overloaded Cabinet Emulator
+//tags: processing distortion waveshaper modeller
+//author: ERSH
+
+slider1:stereo=1<0,1,1{Mono,Stereo}>Stereo Processing
+slider5:preamp_db=0<-50,50,0.01>Preamp, dB
+slider10:limit_hard_db=-30<-50,50,0.001>Clipping Level, dB
+slider11:limit_soft_pct=0<0,100,0.001>Distortion Start, %
+slider12:mid_pct=400<-200,1000,0.001>Clipping Level (Tone), %
+slider15:reso_phase=2<0,1,2,1{OFF,Positive,Negative}>Clipping Resonance
+slider16:reso_db=-8<-100,20,0.001>Resonance Amplitude, dB
+slider17:reso_power_log=3.3<0,10,0.0001>Resonance Frequency
+slider20:filter=0.65<0,1,0.0001>Frequency Filter
+slider22:output_mix_pct=70<0,100,0.1>Dry / Wet, %
+slider24:output_db=0<-50,50,0.01>Output LEVEL, dB
+
+preset:"Default"        1 - - - 0   - - - - -30 0 400  - - 2 -8  3.3   - - 0.65 - 70   - 0
+preset:"Moderate1"      1 - - - 0   - - - - -30 0 400  - - 1 -8  3.3   - - -    - 100  - 0
+preset:"Moderate2"      1 - - - 0   - - - - -15 0 -50  - - 0 -   -     - - -    - 100  - 0
+preset:"Extreme1"       1 - - - 7.7 - - - - -31 0 400  - - 2 3   3     - - 0.6  - 80   - 0
+preset:"Extreme2rubmle" 1 - - - 7.7 - - - - -31 0 650  - - 2 3   3     - - 0.83 - 73   - 0
+preset:"Extreme3"       1 - - - 0   - - - - -30 0 550  - - 2 12  9     - - 0.84 - 20   - 0
+preset:"Extreme4"       1 - - - 0   - - - - -30 0 510  - - 2 3.3 3.65  - - 0.32 - 82   - 0
+preset:"BassBoost"      1 - - - 0   - - - - -30 0 -200 - - 2 40  5.678 - - 0.84 - 12.7 - 0
+
+@init
+
+#format = "                    ";
+TOP=0|256;
+BOT=8|256;
+LEFT=0|256;
+RIGHT=2|256;
+VCENTER=4|256;
+HCENTER=1|256;
+
+INF = 100;
+_INF = -INF;
+LOG10 = log(10);
+LOG2 = log(2);
+PI = asin(1)*2;
+PI2 = PI*2;
+
+function eq(a, b) (abs(a-b) < 0.00001;);
+function neq(a, b) (abs(a-b) >= 0.00001;);
+
+function spl2db(v) (v > 0 ? log(v)*20/LOG10 : _INF);
+function db2spl2(v) (10^(v/20));
+
+function log2(x) ( log(x)/LOG2 );
+function exp2(x) ( exp(x*LOG2) );
+function fract(x) ( x - floor(x) );
+function sinhz(x) ( sin(PI2*x) );
+function saw(x) ( abs((fract(x-0.25)-0.5)*2.)*2.-1. );
+function sawt(x) ( fract(x-0.5)*2.-1. );
+//function sign(x) ( x < 0 ? -1 : x > 0 ? 1 : 0 );
+
+NOTE_C4 = 440. * exp2(-10./12.);
+function note2freq(note) ( NOTE_C4 * exp2(note/12.); );
+
+function mix(a, b, x) ( a*(1-x) + b*x );
+function clamp(x, v1, v2) global() ( min(max(x, v1), v2) );
+//function clamp(x, v1, v2) global() ( v1 < v2 ? min(max(x, v1), v2) : min(max(x, v2), v1));
+function smoothstep(v1, v2, x) global() local(t) (
+  v1 > v2 ? (
+    v1 = -v1;
+    v2 = -v2;
+    x = -x;
+  );
+  t = clamp((x - v1) / (v2 - v1), 0.0, 1.0);
+  t * t * (3.0 - 2.0 * t);
+);
+
+function sp_init() (
+  this.pspl = this.spl = 0;
+);
+// functions:
+//   https://thebookofshaders.com/glossary/?search=smoothstep
+//   https://graphtoy.com/?f1(x,t)=clamp((x%20-%20(-1))%20/%20(1%20-%20(-1)),%200.0,%201.0)&v1=true&f2(x,t)=f1(x)%20*%20f1(x)%20*%20(3.0%20-%202.0%20*%20f1(x))&v2=true&f3(x,t)=f2(x)*2-1&v3=true&f4(x,t)=&v4=false&f5(x,t)=&v5=false&f6(x,t)=&v6=false&grid=2&coords=0,0,1.3333333333333333
+// model:
+//   https://graphtoy.com/?f1(x,t)=sin(x*2)*0.8&v1=true&f2(x,t)=smoothstep(0.6,%200.3,%20abs(f1(x)))&v2=false&f3(x,t)=sin(x*100)*0.1&v3=false&f4(x,t)=f2(x)*f1(x)%20+%20(1-f2(x))*(0.3*sign(f1(x))%20+%20f3(x))&v4=true&f5(x,t)=&v5=false&f6(x,t)=&v6=false&grid=1&coords=0,0,3.8235698125242825
+function sp_sample(spl, filter_mix) global(input_scale limit_soft_val limit_hard_val limit_mid reso_phase reso_power reso_scale output_mix output_scale) local(sspl ss mid ret) (
+  sspl = spl * input_scale;
+  this.pspl = mix(sspl, this.pspl, filter_mix);
+  ss = smoothstep(limit_hard_val, limit_soft_val, abs(this.pspl));
+  mid = limit_mid * sign(this.pspl);
+  ret = mid + (reso_phase ? sin((this.pspl-mid)*reso_power)*reso_scale*limit_mid : 0);
+  ret = mix(ret, this.pspl, ss);
+  ret = mix(spl, ret, output_mix);
+  ret;
+);
+
+
+function Limits() (
+  //dt = 1./srate;
+
+  input_scale = db2spl2(preamp_db);
+
+  limit_hard_val = db2spl2(limit_hard_db);
+  limit_soft_val = limit_hard_val * limit_soft_pct / 100;
+  limit_soft_val = min(limit_soft_val, limit_hard_val-0.00001);
+  limit_mid = (limit_soft_val + limit_hard_val)/2 + (limit_hard_val - limit_soft_val) * mid_pct/2 / 100;
+
+  reso_scale = reso_phase ? (db2spl2(reso_db) * (reso_phase != 1 ? -1 : 1)) : 0;
+  reso_power = exp(reso_power_log*LOG2)-1;
+
+  filter_mix = filter-1; filter_mix = filter_mix*filter_mix*filter_mix+1;
+
+  output_mix = output_mix_pct / 100;
+  output_scale = db2spl2(output_db);
+);
+
+function Reset() (
+  //t = 0;
+  sp0.sp_init();
+  sp1.sp_init();
+  sp_gfx.sp_init();
+);
+
+Limits();
+Reset();
+
+@slider
+
+Limits();
+
+//!(play_state&1) ? (...);
+
+@block
+
+//want_reset = (num_ch > 0 && num_ch != last_nch) || srate != last_sr;
+//last_nch=num_ch;
+//last_sr=srate;
+//
+//cfg_reinit && (play_state&1) ? (
+//  abs(play_position-last_play_pos) > 0.5 ? want_reset=1;
+//  last_play_pos=play_position+samplesblock/srate;
+//);
+//
+//want_reset ? Reset();
+
+@sample
+
+//(play_state&1) ? (
+
+volume_val_next = max(volume_val_next, max(abs(spl0), abs(spl1)));
+stereo ? (
+  //spl0 = sp_sample(spl0, 0, 0) * output_scale;
+  //spl1 = sp_sample(spl1, 0, 0) * output_scale;
+
+  spl0 = sp0.sp_sample(spl0, filter_mix) * output_scale;
+  spl1 = sp1.sp_sample(spl1, filter_mix) * output_scale;
+) : (
+  spl0 = spl1 = sp0.sp_sample((spl0 + spl1)/2, filter_mix) * output_scale;
+);
+
+//spl1 = sp0.v;
+
+//);
+
+@gfx 800 300
+
+FONT_SZ_MIN=12;
+FONT_SZ_MAX=16;
+
+BG_COLOR=$x000000;
+GUIDE_COLOR=$x808080;
+GUIDE_CLIP_COLOR=$x808050;
+RESO_COLOR=$x0000FF;
+TEXT_COLOR=$xC0C0C0;
+GRAPH_IN_COLOR=$x8080FF;
+GRAPH_OUT_COLOR=$xFF5F5F;
+VOLUME_COLOR=$x00FFA0;
+
+gfx_h2 = (gfx_h-1)/2;
+gfx_w2 = (gfx_w-1)/2;
+
+// Thick line x2
+function gfx_line2(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy, 0);
+  gfx_line(x1,y1,x2,y2, 0);
+);
+function gfx_lineto2(x, y) local(dx dy) global(gfx_x gfx_y) ( gfx_line2(gfx_x, gfx_y, x, y); gfx_x=x; gfx_y=y; );
+// Thick line x3
+function gfx_line3(x1, y1, x2, y2) local(dx dy) (
+  (abs(x1-x2) >= abs(y1-y2)) ? ( dx=0; dy=1; ) : ( dx=1; dy=0; );
+  gfx_line(x1+dx,y1+dy,x2+dx,y2+dy, 0);
+  gfx_line(x1-dx,y1-dy,x2-dx,y2-dy, 0);
+  gfx_line(x1,y1,x2,y2, 0);
+);
+function gfx_lineto3(x, y) local(dx dy) global(gfx_x gfx_y) ( gfx_line3(gfx_x, gfx_y, x, y); gfx_x=x; gfx_y=y; );
+function gfx_line_thick(x1, y1, x2, y2, thick) local(dx dy) (
+  thick <= 1 ? (
+    thick = 1;
+    dx = 0; dy = 0;
+  ) : (
+    (abs(x1-x2) >= abs(y1-y2)) ?
+      ( dx=0; dy=1; y1 -= thick/2; y2 -= thick/2; ) :
+      ( dx=1; dy=0; x1 -= thick/2; x2 -= thick/2; );
+  );
+  loop(thick,
+    gfx_line(x1,y1,x2,y2);
+    x1 += dx; x2 += dx; y1 += dy; y2 += dy;
+  );
+  gfx_x = x2; gfx_y = y2;
+);
+function gfx_color1(c) global(gfx_r gfx_g gfx_b gfx_a) (
+  gfx_b = (c & $xFF)/255; c = c >> 8;
+  gfx_g = (c & $xFF)/255; c = c >> 8;
+  gfx_r = (c & $xFF)/255; c = c >> 8;
+  gfx_a = (c > 0 ? (c & $xFF)/255 : 1);
+);
+function gfx_color3(r,g,b)   global(gfx_r gfx_g gfx_b gfx_a) ( gfx_r=r; gfx_g=g; gfx_b=b; gfx_a=1; );
+function gfx_color4(r,g,b,a) global(gfx_r gfx_g gfx_b gfx_a) ( gfx_r=r; gfx_g=g; gfx_b=b; gfx_a=a; );
+
+function Guide(level, text, color, x1, f1, x2, f2) global(range_max gfx_w gfx_w2 gfx_h gfx_h2 gfx_x gfx_y) local(y) (
+  y = level * gfx_h2/range_max;
+  gfx_color1(color + $x80000000);
+  f1 >= -1 ? gfx_line(0, gfx_h2 - y, gfx_w, gfx_h2 - y, 1);
+  f2 >= -1 ? gfx_line(0, gfx_h2 + y, gfx_w, gfx_h2 + y, 1);
+  gfx_color1(color);
+  f1 >= 0 ? (gfx_x = gfx_w2*x1; gfx_y = gfx_h2 - y; gfx_drawstr(text, f1, gfx_x, gfx_y));
+  f2 >= 0 ? (gfx_x = gfx_w2*x2; gfx_y = gfx_h2 + y; gfx_drawstr(text, f2, gfx_x, gfx_y));
+);
+function GuideLevel(level, text, color, x1, f1, x2, f2) global(#format) local(y) (
+  Guide(level, (sprintf(#format, "%s%+.2f dB", text, spl2db(level)); #format), color, x1, f1, x2, f2);
+);
+function GuideRange(levelMin, levelMax, text, color, x1, f1, x2, f2) global(range_max gfx_w gfx_w2 gfx_h gfx_h2 gfx_x gfx_y) local(y1 y2 h) (
+  y1 = min(levelMin, levelMax) * gfx_h2/range_max;
+  y2 = max(levelMin, levelMax) * gfx_h2/range_max;
+  h = abs(levelMin - levelMax) * gfx_h2/range_max;
+  gfx_color1(color + $x38000000);
+  f1 >= 0 ? gfx_rect(0, gfx_h2 - y2, gfx_w, h);
+  f2 >= 0 ? gfx_rect(0, gfx_h2 + y1, gfx_w, h);
+  //gfx_color1(color);
+  //f1 >= 0 ? (gfx_x = gfx_w2*x1; gfx_y = gfx_h2 - y2; gfx_drawstr(text, f1, gfx_x, gfx_y));
+  //f2 >= 0 ? (gfx_x = gfx_w2*x2; gfx_y = gfx_h2 + y1; gfx_drawstr(text, f2, gfx_x, gfx_y));
+);
+
+gfx_clear=((BG_COLOR&$xFF)<<16)|(BG_COLOR&$xFF00)|((BG_COLOR&$xFF0000)>>16);
+
+fsz=FONT_SZ_MIN+min(gfx_w/100,FONT_SZ_MAX-FONT_SZ_MIN);
+fsz *= 0.8;
+gfx_ext_retina > 1 ? fsz *= 1.5;
+gfx_setfont(1, "Courier New", fsz, $'b');
+
+// Calculate range
+range_max = 1;
+output_max = 0;
+buf_lin = 0;
+buf_sin = gfx_w2;
+i = 0;
+lin_x = 0; dx_lin = 1/(gfx_w2-1);
+sin_x = 0; dx_sin = PI2/(gfx_w2-1);
+loop(gfx_w2,
+  buf_lin[i] = val = sp_gfx.sp_sample(lin_x, 0);
+  range_max = max(range_max, abs(val));
+  output_max = max(output_max, abs(val));
+  buf_sin[i] = val = sp_gfx.sp_sample(sin(sin_x), 0);
+  range_max = max(range_max, abs(val));
+  output_max = max(output_max, abs(val));
+  i += 1; lin_x += dx_lin; sin_x += dx_sin;
+);
+range_max = output_max;
+mouse_cap&1 ? range_max = 1;//output_max;
+//range_max *= 1.2;
+//range_max = exp2(ceil(log(range_max)/LOG2));
+range_max = db2spl2(ceil(spl2db(range_max)/6)*6);
+
+// Draw volume bar
+volume_val = volume_val_next;
+volume_val_next = 0;
+gfx_color1(VOLUME_COLOR);
+gfx_rect(0, gfx_h2-5, volume_val*gfx_w2, 11);
+
+// Draw filled ranges
+GuideRange(limit_mid*(1-reso_scale), limit_mid*(1+reso_scale), "reso ", RESO_COLOR, 1,TOP|LEFT, 1,TOP|LEFT);
+
+// Draw source signal
+gfx_color1(GRAPH_IN_COLOR);
+gfx_line3(0, gfx_h2, gfx_w2, gfx_h2 - 1/range_max*gfx_h2);
+sin_x = 0;
+sx0 = sx = 0; sy0 = sy = gfx_h2;
+loop(gfx_w2+1,
+  sy = gfx_h2 - sin(sin_x)/range_max*gfx_h2;
+  gfx_line3(sx0+gfx_w2, sy0, sx+gfx_w2, sy);
+  sx0 = sx; sy0 = sy;
+  sx += 1; sin_x += dx_sin;
+);
+
+// Draw output signal
+gfx_color1(GRAPH_OUT_COLOR);
+i = 0; x = 0;
+gfx_x = 0; gfx_y = gfx_h2;
+loop(gfx_w2,
+  gfx_lineto3(x, gfx_h2 - buf_lin[i]/range_max*gfx_h2);
+  i += 1; x += 1;
+);
+i = 0; x = gfx_w2;
+gfx_x = gfx_w2; gfx_y = gfx_h2;
+loop(gfx_w2,
+  gfx_lineto3(x, gfx_h2 - buf_sin[i]/range_max*gfx_h2);
+  i += 1; x += 1;
+);
+
+// Draw grid
+gfx_color1(GUIDE_COLOR);  gfx_line(0, gfx_h2, gfx_w, gfx_h2, 1);
+
+//reso_phase ? GuideLevel(limit_mid, "reso center ", RESO_COLOR, 1,-2, 1,VCENTER|LEFT);
+
+GuideLevel(limit_hard_val, "clip ", GUIDE_CLIP_COLOR, 0,VCENTER|LEFT, 1,-2);
+GuideLevel(limit_soft_val, "distort start ", GUIDE_CLIP_COLOR, 1,VCENTER|RIGHT, 1,-2);
+GuideLevel(limit_mid, "", GUIDE_CLIP_COLOR, 1.5,VCENTER|LEFT, 1,-1);
+
+
+range_max >= 1 && gfx_h2/range_max > gfx_texth ? Guide(1, "0 dB", TEXT_COLOR, 0,TOP|LEFT, 0,BOT|LEFT);
+range_max < 1 || abs(gfx_h2/range_max - range_max * gfx_h2/range_max) > gfx_texth ?
+  GuideLevel(range_max, "", TEXT_COLOR, 0,TOP|LEFT, 0,BOT|LEFT);
+
+GuideLevel(output_max, "", GRAPH_OUT_COLOR, 2,TOP|RIGHT, 0,BOT|LEFT);
+
