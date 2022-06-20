@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="65b51606aec206d7241d70511bdfb81187a93b6d">
+<index version="1" name="ERSH plugins and effects" commit="f0a8cd7df4e40995f83a50c534bac21348703a30">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -224,6 +224,25 @@ v1.3.0:
         <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/65b51606aec206d7241d70511bdfb81187a93b6d/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
     </reapack>
+    <reapack name="ersh_cabinet_emu.jsfx" type="effect" desc="Waveshaping Overloaded Cabinet Emulator">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Waveshaping Overloaded cabinet speaker emulator.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Math model of single speaker cabinet.\par}
+}
+]]></description>
+        <link rel="website">https://github.com/ershov/reaper64</link>
+      </metadata>
+      <version name="1.0.0" author="ERSH, Yury Ershov" time="2022-06-20T14:08:32Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/f0a8cd7df4e40995f83a50c534bac21348703a30/JSFX/ersh_cabinet_emu.jsfx</source>
+        <source file="ersh_cabinet_emu.jsfx.rpl">https://github.com/ershov/reaper64/raw/f0a8cd7df4e40995f83a50c534bac21348703a30/JSFX/ersh_cabinet_emu.jsfx.rpl</source>
+      </version>
+    </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -280,12 +299,23 @@ v2.1:
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Yury Ershov's reaper64 effects\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Transient Controller mod\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Yury Ershov's reaper64 tools and effects\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Effects\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel2 \b \fs28 Transient Controller mod\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/twKTY5g27fE\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Automatic Gain Control (AGC)\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel2 \b \fs28 Automatic Gain Control (AGC)\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/hPcTy4PMVwg\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Phase-corrected "Simple 1-Pole Filter" for better highpass filtering.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 https://youtu.be/fb0ikjAVGkQ\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel2 \b \fs28 Phase-corrected "Simple 1-Pole Filter" for better highpass filtering.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Tools\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel2 \b \fs28 Embed presets in JSFX source\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab {\f1 make_rpl_all}\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel2 \b \fs28 JSFX (eel2) static checker\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 You'll need two files: {\f1 jsfx_check.pl} and {\f1 jsfx_check}.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 To check a set of files, use\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \f1 jsfx_check [files...]\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 To check a set of files as a single script, do\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \f1 jsfx_check.pl [files...]\par}
 }
 ]]></description>
   </metadata>
