@@ -1,0 +1,88 @@
+/**
+  JSFX Name: Speaker Mix
+  Author: ERSH, Yury Ershov
+  Licence: LGPL
+  REAPER: 6.0
+  Version: 1.0.0
+  Tags: processing
+  Provides:
+    ersh_speaker_mix-inc/ersh_alloc.jsfx-inc
+    ersh_speaker_mix-inc/ersh_ringbuf.jsfx-inc
+  About:
+    Speaker Mix.
+
+    Simulate speakers listening experience with headphones
+    by mixing in channels with delay and eq correction.
+  Link: https://github.com/ershov/reaper64
+  Changelog:
+    v1.0:
+    * Initial release
+*/
+
+// (C) 2022, Yury Ershov.
+// License: LGPL - http://www.gnu.org/licenses/lgpl.html
+
+desc: Speaker Mix
+//tags: processing
+//author: ERSH
+
+slider1:delay=20<0,100,0.01>Distance between ears, cm
+slider2:damp=90<0,100,0.01>Cross Muffling
+slider3:leak=-2.5<-60,6,0.01>Cross Leak, dB
+slider4:phase=0<0,1,1{+,-}>Cross Phase
+slider10:output=0<-60,12,0.1>Output Volume, dB
+
+import ersh_speaker_mix-inc/ersh_alloc.jsfx-inc
+import ersh_speaker_mix-inc/ersh_ringbuf.jsfx-inc
+
+@init
+
+sound_spd = 340*100;  // cm/s
+
+INF = 100;
+_INF = -INF;
+LOG10 = log(10);
+
+function eq(a, b) (abs(a-b) < 0.00001;);
+function neq(a, b) (abs(a-b) >= 0.00001;);
+
+function spl2db(v) (v > 0 ? log(v)*20/LOG10 : _INF);
+function db2spl2(v) (10^(v/20));
+
+function mix(a, b, x) ( a*(1-x) + b*x );
+
+muff0 = 0;
+muff1 = 0;
+function Reset() (
+  alloc.top = 0;
+  delay_new = 0|(delay / sound_spd * srate);
+  delay_smpl != delay_new ? (
+    delay_smpl = delay_new;
+    buf0.ring_init(alloc(delay_smpl), delay_smpl, 0);
+    buf1.ring_init(alloc(delay_smpl), delay_smpl, 0);
+  );
+  leak_val = db2spl2(leak);
+  phase_sign = !phase ? 1 : -1;
+  output_val = db2spl2(output);
+);
+
+Reset();
+
+@slider
+
+Reset();
+
+@sample
+
+muff0 = mix(spl0, muff0, damp/100);
+muff1 = mix(spl1, muff1, damp/100);
+buf0.size > 0 ? (
+  spl0 = (spl0 + phase_sign*buf1.ring_get(0)*leak_val) * output_val;
+  spl1 = (spl1 + phase_sign*buf0.ring_get(0)*leak_val) * output_val;
+  buf0.ring_push(muff0);
+  buf1.ring_push(muff1);
+) : (
+  spl0 = (spl0 + phase_sign*muff1*leak_val) * output_val;
+  spl1 = (spl1 + phase_sign*muff0*leak_val) * output_val;
+)
+

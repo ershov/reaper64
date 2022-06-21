@@ -1,0 +1,10 @@
+// Memory allocation library.
+//
+// Usage:
+//
+//  alloc.top = 0;
+//  buf1 = alloc(size1);
+//  buf2 = alloc(size2);
+//  current_top = alloc.top;
+@init
+function alloc(sz) global() ( memset((this.top+=sz)-sz,0,sz); );
