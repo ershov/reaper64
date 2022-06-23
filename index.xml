@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="6758598dd48ebe05770e1b9814e167e3ce10fea3">
+<index version="1" name="ERSH plugins and effects" commit="afe828bc884dd4c18d03ac4e015a0ce2a267488e">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -222,6 +222,31 @@ v1.3.0:
         <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/65b51606aec206d7241d70511bdfb81187a93b6d/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
         <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/65b51606aec206d7241d70511bdfb81187a93b6d/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
         <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/65b51606aec206d7241d70511bdfb81187a93b6d/JSFX/ersh_agc.jsfx.rpl</source>
+      </version>
+      <version name="1.3.2" author="ERSH, Yury Ershov" time="2022-06-23T14:41:23Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1.0:
+* Add Predictive Peak Limiter for non-peak driven modes
+v1.2.0:
+* (internal) Use separate files for libraries
+v1.2.1:
+* Add presets
+v1.2.2:
+* Correct initial gain value
+v1.2.4:
+* Correct "long" modes (RMS, LUFS) lookahead.
+v1.2.5:
+* Add "Reset" button
+v1.3.0:
+* Improvements to peak limiter
+* Added a "Limiter" preset]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc.jsfx</source>
+        <source file="ersh_agc-inc/ersh_alloc.jsfx-inc">https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc-inc/ersh_alloc.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_deque.jsfx-inc">https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc-inc/ersh_deque.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_graphlib.jsfx-inc">https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc-inc/ersh_graphlib.jsfx-inc</source>
+        <source file="ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc">https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc-inc/ersh_ringbuf_abs.jsfx-inc</source>
+        <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/afe828bc884dd4c18d03ac4e015a0ce2a267488e/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
     </reapack>
     <reapack name="ersh_cabinet_emu.jsfx" type="effect" desc="Waveshaping Overloaded Cabinet Emulator">
