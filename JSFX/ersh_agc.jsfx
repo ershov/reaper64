@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.3.1
+  Version: 1.3.2
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -60,20 +60,20 @@ desc: AGC - Automatic Gain Control
 //tags: analysis loudness dynamics
 //author: ERSH
 
-preset:"Normal" 4 -18 5 1 -50 50 1 1
-preset:"Medium" 4 -18 3 4 -50 50 1 1
-preset:"Fast" 4 -18 1 10 -50 50 1 1
-preset:"Extreme" 0 -10 0.1 100 -100 100 1 1
-preset:"Limiter" 0 0 0.05 1000 -50 0 0 1
-preset:"Automatic Gain (Online)" 0 0 0 0.5 -50 20 0 1
+preset:"Normal"                   4  -18  5     1     -50   50   1  1
+preset:"Medium"                   4  -18  3     4     -50   50   1  1
+preset:"Fast"                     4  -18  1     10    -50   50   1  1
+preset:"Extreme"                  0  -10  0.1   100   -100  100  1  1
+preset:"Limiter"                  0  0    0.05  1000  -50   0    0  1
+preset:"Automatic Gain (Online)"  0  0    0     0.5   -50   20   0  1
 
-slider1:agc_by=4<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
-slider2:agc_to=-18<-100,0,0.01>AGC Output level (in units above)
-slider3:agc_lookahead=5<0,30,0.001>AGC Lookahead, sec
-slider4:agc_release_rate=1<1,20,0.001>AGC Release, dB/sec
+slider1:agc_by=0<0,7,1{Peak,True Peak,RMS-M,RMS-I,LUFS-M,LUFS-S,LUFS-I,LUFS-LRA}>AGC input
+slider2:agc_to=0<-100,0,0.01>AGC Output level (in units above)
+slider3:agc_lookahead=0<0,30,0.001>AGC Lookahead, sec
+slider4:agc_release_rate=0.5<1,20,0.001>AGC Release, dB/sec
 slider5:agc_min=-50<-100,100,0.01>AGC Minimum Gain
 slider6:agc_max=50<-100,100,0.01>AGC Maximum Gain
-slider7:cfg_use_peak_limiter=1<0,1,1{No,Yes}>Use Predictive Peak Limiter
+slider7:cfg_use_peak_limiter=0<0,1,1{No,Yes}>Use Predictive Peak Limiter
 slider8:use_pdc_delay=1<0,1,1{No,Yes}>Set PDC Delay
 
 slider19:cfg_mono=0<0,1,1{off,on}>Force mono analysis
@@ -683,7 +683,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   );
 );
 
-(play_state&1) ? (
+//(play_state&1) ? (
   spl0_buf.rb_push(spl0);
   spl1_buf.rb_push(spl1);
   global_sample_peak_db = (global_sample_peak > 0 ? log(global_sample_peak)*20/LOG10 : _INF);
@@ -742,7 +742,7 @@ num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(
   spl0 = spl0_buf.rb_get_tail() * agc_spl_scale;
   spl1 = spl1_buf.rb_get_tail() * agc_spl_scale;
   PEAK_DEBUG ? (debug_peak = max(abs(spl0), abs(spl1)); graph_peak_debug2.g_sample((debug_peak > 0 ? log(debug_peak)*20/LOG10 : _INF)); );
-);
+//);
 
 @gfx 800 320
 
