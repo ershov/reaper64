@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -uexo pipefail
+
+mkdir -p $HOME/bin/gem
+
+export GEM_HOME=$HOME/bin/gem GEM_PATH=/Library/Ruby/Gems/2.6.0:$HOME/bin/gem PATH="$PATH:$HOME/bin/gem/bin"
+
+export PATH="/opt/homebrew/opt/ruby/bin:$HOME/bin/gem/bin:$PATH"
+
+gem install reapack-index
+brew install pandoc
+
+#echo '#!/bin/bash' > ~/bin/reapack-index
+#echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/bin/reapack-index
+#echo 'export GEM_HOME=$HOME/bin/gem GEM_PATH=/Library/Ruby/Gems/2.6.0:$HOME/bin/gem PATH="$PATH:$HOME/bin/gem/bin"' >> ~/bin/reapack-index
+#echo '~/bin/gem/bin/reapack-index "$@"' >> ~/bin/reapack-index
+
+
+
+#ruby is keg-only, which means it was not symlinked into /opt/homebrew,
+#because macOS already provides this software and installing another version in
+#parallel can cause all kinds of trouble.
+#
+#If you need to have ruby first in your PATH, run:
+#  echo 'export PATH="/opt/homebrew/opt/ruby/bin:$PATH"' >> ~/.profile
+#
+#For compilers to find ruby you may need to set:
+#  export LDFLAGS="-L/opt/homebrew/opt/ruby/lib"
+#  export CPPFLAGS="-I/opt/homebrew/opt/ruby/include"
+#
+#For pkg-config to find ruby you may need to set:
+#  export PKG_CONFIG_PATH="/opt/homebrew/opt/ruby/lib/pkgconfig"
+
