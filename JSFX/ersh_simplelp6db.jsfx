@@ -3,7 +3,7 @@
   Author: ersh, Yury Ershov
   Licence: GPL
   REAPER: 6.0
-  Version: 2.0.0
+  Version: 2.0.1
   About:
     Improved version of Reaper's standard filter.
     Phase correction for High-Pass mode improves the filter's efficiency but may add clicks when the cutoff frequency changes.
@@ -17,6 +17,8 @@
     * Add Phase correction for HP mode.
     * Add Wet/Dry balance.
     * Original waveform: https://i.imgur.com/35YRvDD.png Improved waveform: https://i.imgur.com/6025IWy.png
+    v2.0:
+    * Fixed pdc_delay: set pdc_bot_ch and pdc_top_ch.
 */
 
 // (C) 2008-2009, Lubomir I. Ivanov
@@ -86,6 +88,7 @@ outgain = 10^(slider6/20);
 //delay init
 delay = min(floor(srate / cutoff / 5), delay_max);
 pdc_delay = hp == 0 || (!slider4) ? 0 : delay;
+pdc_bot_ch = 0; pdc_top_ch = num_ch;
 memset(0, 0, delay*2);
 delay_idx_write = 0;
 delay_idx_read = 1;

@@ -3,7 +3,7 @@
   Author: ERSH, Yury Ershov
   Licence: LGPL
   REAPER: 6.0
-  Version: 1.3.2
+  Version: 1.3.3
   Tags: analysis loudness dynamics
   Provides:
     ersh_agc-inc/ersh_alloc.jsfx-inc
@@ -45,6 +45,8 @@
     v1.3.0:
     * Improvements to peak limiter
     * Added a "Limiter" preset
+    v1.3.3:
+    * Fixed pdc_delay: set pdc_bot_ch and pdc_top_ch.
 */
 
 // (C) 2021, Yury Ershov.
@@ -507,6 +509,7 @@ want_reset ? Reset();
 
 //pdc_delay = agc_lookahead_sz;
 
+
 pk_decay=pow(0.5, samplesblock/srate/PEAK_METER_DECAY);
 
 ch0.decay(); ch1.decay();
@@ -570,6 +573,8 @@ num_ch > 40 ? ( ch40.proc(spl40); ch41.proc(spl41); ch42.proc(spl42); ch43.proc(
 num_ch > 48 ? ( ch48.proc(spl48); ch49.proc(spl49); ch50.proc(spl50); ch51.proc(spl51); ch52.proc(spl52); ch53.proc(spl53); ch54.proc(spl54); ch55.proc(spl55);
 num_ch > 56 ? ( ch56.proc(spl56); ch57.proc(spl57); ch58.proc(spl58); ch59.proc(spl59); ch60.proc(spl60); ch61.proc(spl61); ch62.proc(spl62); ch63.proc(spl63);
 ))))))))))));
+
+pdc_bot_ch = 0; pdc_top_ch = num_ch;
 
 (win_pos += 1) >= win_len ? (
   win_pos=0;
