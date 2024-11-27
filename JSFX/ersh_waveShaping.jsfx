@@ -1,0 +1,458 @@
+/**
+  JSFX Name: Waveshaping Distortion 2 by ERSH
+  Author: ersh
+  Licence: GPL
+  REAPER: 6.0
+  Version: 1.0.0
+  About:
+    Extended version of standard Waveshaping Distortion.
+
+    This wave shaper also uses 1st and 2nd derivatives of the waveform.
+    Because of extreme sensitivity, it should be put as early as possible
+    in the chain of effects - preferably, the first.
+
+  Provides:
+    ersh_waveShaping.jsfx.rpl
+
+  Changelog:
+    v1.0:
+    * Initial release
+*/
+
+// (C) 2007, Michael Gruhn.
+// (C) 2024, Yury Ershov.
+
+// NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+// WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
+// ANY DIRECT OR INDIRECT,  SPECIAL,  INCIDENTAL OR CONSEQUENTIAL DAMAGE ARISING
+// OUT OF  THE  USE  OR INABILITY  TO  USE  THIS PLUG-IN,  COMPUTER FAILTURE  OF
+// MALFUNCTION INCLUDED.  THE USE OF THE SOURCE CODE,  EITHER  PARTIALLY  OR  IN
+// TOTAL, IS ONLY GRANTED,  IF USED IN THE SENSE OF THE AUTHOR'S INTENTION,  AND
+// USED WITH ACKNOWLEDGEMENT OF THE AUTHOR. FURTHERMORE IS THIS PLUG-IN A  THIRD
+// PARTY CONTRIBUTION,  EVEN IF INCLUDED IN REAPER(TM),  COCKOS INCORPORATED  OR
+// ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
+// PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
+// ENTRUST SOMEBODY ELSE WITH DOING SO.
+
+desc:Waveshaping Distortion 2 by ERSH
+//tags: processing distortion waveshaper
+//author: LOSER, ERSH
+
+slider4:s_k0=0<-60,24,.000001>Output Gain (dB) - Clean
+slider5:s_mode0=1<0,2,1{Off,Normal,Inverted}>Output mode - Clean
+
+slider11:s_input1=0<-60,24,.000001>Input Gain (dB) - Distorted
+slider12:s_lpf1=0<0,100,.000001>Low Pass Filter (%) - Distorted
+slider13:s_dist1=0<-100,100,.000001>Distortion (%) - Distorted
+slider14:s_k1=0<-60,24,.000001>Output Gain (dB) - Distorted
+slider15:s_mode1=0<0,4,1{Off,Normal,Inverted,Multiply,Multiply Inverted}>Output mode - Distorted
+
+slider21:s_input2=0<-60,24,.000001>Input Gain (dB) - 1st derivative
+slider22:s_lpf2=0<0,100,.000001>Low Pass Filter' (%) - 1st derivative
+slider23:s_dist2=0<-100,100,.000001>Distortion' (%) - 1st derivative
+slider24:s_k2=0<-60,24,.000001>Output Gain' (dB) - 1st derivative
+slider25:s_mode2=0<0,4,1{Off,Normal,Inverted,Multiply,Multiply Inverted}>Output mode' - 1st derivative
+
+slider31:s_input3=0<-60,24,.000001>Input Gain (dB) - 2st derivative
+slider32:s_lpf3=0<0,100,.000001>Low Pass Filter'' (%) - 2nd derivative
+slider33:s_dist3=0<-100,100,.000001>Distortion'' (%) - 2nd derivative
+slider34:s_k3=0<-60,24,.000001>Output Gain'' (dB) - 2nd derivative
+slider35:s_mode3=0<0,4,1{Off,Normal,Inverted,Multiply,Multiply Inverted}>Output mode'' - 2nd derivative
+
+slider50:s_output=0<-60,6,.000001>Global Output (dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+preset:"Default"                  - - - -60 1 - - - - - 0  0 0 -60   1 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Loudness boost"           - - - -60 1 - - - - - 0  0 40  0   1 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Distortion 1"             - - - -60 1 - - - - - 0  0 50  0   1 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Distortion inv"           - - -   0 1 - - - - - 0  0 50  2   2 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Distortion inv soft"      - - -   0 1 - - - - - 0 60 50 -1.8 2 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Distortion warm"          - - -   0 1 - - - - - 9.2 98.3 86.5 0 2 - - - - - 0 0   0 -60 1 - - - - - 0 0    0 -60 1 - - - - - - - - - - - - - -  0
+preset:"Distortion broken"        - - -  -1 1 - - - - - 15 86.25 71.5 2 4 - - - - - 3.84 78.5 43.4 3.84 0 - - - - - 0 50 -28.5 -8 0 - - - - - - - - - - - - - -  -5
+preset:"Clarity Saturation 1 1"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0  -30 -6 1 - - - - - 0 0    0 -60 0 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 1 2"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 16 -45  0 1 - - - - - 0 0    0 -60 0 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 1 3"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 55  17  2 1 - - - - - 0 0    0 -60 0 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 2 1"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0   0 -60 0 - - - - - 0 0  -42 -21 2 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 2 2"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0   0 -60 0 - - - - - 0 34 -13 -16 2 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 2 3"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0   0 -60 0 - - - - - 0 61  24 -13 2 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 2 4"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0   0 -60 0 - - - - - 0 84  62 -10 2 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 2 5"   - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 0   0 -60 0 - - - - - 2.5 98.97 94 -10 1 - - - - - - - - - - - - - -  0
+preset:"Clarity Saturation 1+2 1" - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 30 -80 10 1 - - - - - 0 94.3 0  13 1 - - - - - - - - - - - - - - -0.88
+preset:"Clarity Saturation 1+2 2" - - -   0 1 - - - - - 0  0 0 -60   0 - - - - - 0 30 -80 10 1 - - - - - 0 94.3 0  13 2 - - - - - - - - - - - - - - -0.88
+
+@init
+ext_tail_size = -2;
+
+LOG10 = log(10);
+
+spl0_p = spl1_p = d0a_p = d1a_p = dd0_p = dd1_p = 0;
+spl0f = spl1f = d0f = d1f = dd0f = dd1f = 0;
+
+function distort_pos(spl, k) (
+    (1+k)*spl/(1+k*abs(spl))
+);
+function distort(spl, s_slider, k) (
+   //s_slider > 0 ? (1+k)*spl/(1+k*abs(spl)) :
+   //s_slider < 0 ? (1/(k+1))*spl/(1+(1/(k+1)-1)*abs(spl)) :
+   //spl;
+   s_slider == 0 ? spl :
+   s_slider > 0 ? distort_pos(spl, k) :
+   spl > 0 ? 1-distort_pos(1-spl, k) :
+   spl < 0 ? distort_pos(1+spl, k)-1 :
+   spl;
+);
+
+function splscale(spl) (
+    spl >= 0 ? -1/(1+spl)+1 : 1/(1-spl)-1;
+//  spl > 0 ? log(1+spl)*20/LOG10 :
+//  spl < 0 ? log(1-spl)*20/LOG10 :
+//  0;
+);
+
+function lpf(oldval, newval, k_old, k_new) (
+    oldval * k_old + newval * k_new;
+);
+
+@slider
+hdistr1 = min(abs(s_dist1)/100,.999);
+k1 = 2*hdistr1/(1-hdistr1);
+
+hdistr2 = min(abs(s_dist2)/100,.999);
+k2 = 2*hdistr2/(1-hdistr2);
+
+hdistr3 = min(abs(s_dist3)/100,.999);
+k3 = 2*hdistr3/(1-hdistr3);
+
+mix0 = s_k0 <= -60 ? 0 : (10^(s_k0/20)) * (s_mode0 == 0 ? 0 : s_mode0 == 2 ? -1 : 1);
+mix1 = s_k1 <= -60 ? 0 : (10^(s_k1/20)) * (s_mode1 == 0 ? 0 : s_mode1 == 2 || s_mode1 == 4 ? -1 : 1);
+mix2 = s_k2 <= -60 ? 0 : (10^(s_k2/20)) * (s_mode2 == 0 ? 0 : s_mode2 == 2 || s_mode2 == 4 ? -1 : 1);
+mix3 = s_k3 <= -60 ? 0 : (10^(s_k3/20)) * (s_mode3 == 0 ? 0 : s_mode3 == 2 || s_mode3 == 4 ? -1 : 1);
+multiply1 = (s_mode1 == 3 || s_mode1 == 4);
+multiply2 = (s_mode2 == 3 || s_mode2 == 4);
+multiply3 = (s_mode3 == 3 || s_mode3 == 4);
+
+function decaypersec2lpf(decaysec) (
+    // x ^ srate = decaysec
+    // log(decaysec)/log(x) = srate
+    // log(x) = log(decaysec)/srate
+    // x = exp(log(decaysec)/srate)
+    decaysec > 0.0001 ? exp(log(decaysec)*100000/srate) : 0;
+);
+
+abs(s_lpf1) > 0 ? (
+    s_lpf1_old = decaypersec2lpf(distort_pos(min(abs(s_lpf1)/100,1), 10));
+    s_lpf1_new = 1 - s_lpf1_old;
+) : (
+    s_lpf1_old = 0;
+    s_lpf1_new = 1;
+);
+abs(s_lpf2) > 0 ? (
+    s_lpf2_old = decaypersec2lpf(distort_pos(min(abs(s_lpf2)/100,1), 10));
+    s_lpf2_new = 1 - s_lpf2_old;
+) : (
+    s_lpf2_old = 0;
+    s_lpf2_new = 1;
+);
+abs(s_lpf3) > 0 ? (
+    s_lpf3_old = decaypersec2lpf(distort_pos(min(abs(s_lpf3)/100,1), 10));
+    s_lpf3_new = 1 - s_lpf3_old;
+) : (
+    s_lpf3_old = 0;
+    s_lpf3_new = 1;
+);
+
+input1_scale = s_input1 <= -60 ? 0 : 10^(s_input1/20);
+input2_scale = s_input2 <= -60 ? 0 : 10^(s_input2/20);
+input3_scale = s_input3 <= -60 ? 0 : 10^(s_input3/20);
+output_scale = s_output <= -60 ? 0 : 10^(s_output/20);
+
+@sample
+
+spl0f = lpf(spl0f, spl0 * input1_scale, s_lpf1_old, s_lpf1_new);
+spl1f = lpf(spl1f, spl1 * input1_scale, s_lpf1_old, s_lpf1_new);
+
+d0a = ((spl0 - spl0_p) * srate / 5000);
+d1a = ((spl1 - spl1_p) * srate / 5000);
+spl0_p = spl0;
+spl1_p = spl1;
+d0f = lpf(d0f, d0a * input2_scale, s_lpf2_old, s_lpf2_new);
+d1f = lpf(d1f, d1a * input2_scale, s_lpf2_old, s_lpf2_new);
+d0s = splscale(d0f);
+d1s = splscale(d1f);
+
+dd0a = (d0a - d0a_p) * srate / 5000;
+dd1a = (d1a - d1a_p) * srate / 5000;
+dd0f = lpf(dd0f, dd0a * input3_scale, s_lpf3_old, s_lpf3_new);
+dd1f = lpf(dd1f, dd1a * input3_scale, s_lpf3_old, s_lpf3_new);
+dd0s = splscale(dd0f);
+dd1s = splscale(dd1f);
+d0a_p = d0a;
+d1a_p = d1a;
+
+
+//spl0 = distort(spl0, s_dist1, k1)*mix1 + distort(d0s, s_dist2, k2)*mix2 + distort(dd0s, s_dist3, k3)*mix3;
+//spl1 = distort(spl1, s_dist1, k1)*mix1 + distort(d1s, s_dist2, k2)*mix2 + distort(dd1s, s_dist3, k3)*mix3;
+
+//spl0 = distort(spl0, s_dist1, k1)*mix1 + distort(d0s + distort(dd0s, s_dist3, k3)*mix3, s_dist2, k2)*mix2;
+//spl1 = distort(spl1, s_dist1, k1)*mix1 + distort(d1s + distort(dd1s, s_dist3, k3)*mix3, s_dist2, k2)*mix2;
+
+//spl0 =                          spl0*mix0 +
+//       distort(   spl0f, s_dist1, k1)*mix1 +
+//       distort(d0s*spl0f, s_dist2, k2)*mix2 +
+//       distort(     dd0s, s_dist3, k3)*mix3;
+//spl1 =                          spl1*mix0 +
+//       distort(   spl1f, s_dist1, k1)*mix1 +
+//       distort(d1s*spl1f, s_dist2, k2)*mix2 +
+//       distort(     dd1s, s_dist3, k3)*mix3;
+
+spl0 = mix0 * spl0 +
+       mix1 * distort(spl0f, s_dist1, k1) * (multiply1 ? spl0 : 1) +
+       mix2 * distort(  d0s, s_dist2, k2) * (multiply2 ? spl0 : 1) +
+       mix3 * distort( dd0s, s_dist3, k3) * (multiply3 ? spl0 : 1);
+spl1 = mix0 * spl1 +
+       mix1 * distort(spl1f, s_dist1, k1) * (multiply1 ? spl1 : 1) +
+       mix2 * distort(  d1s, s_dist2, k2) * (multiply2 ? spl1 : 1) +
+       mix3 * distort( dd1s, s_dist3, k3) * (multiply3 ? spl1 : 1);
+
+spl0 *= output_scale;
+spl1 *= output_scale;
+
+@gfx 256 256
+
+gfxSize = min(gfx_w/4 - 3,gfx_h);
+gfx_step=1/gfxSize;
+gfx_end=1 + gfx_step - 0.001;
+
+gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+gfx_x=gfx_y=0;
+gfx_rectto(gfx_w,gfx_h);
+
+gfx_r=gfx_g=gfx_b=0.8; gfx_a=1;
+gfx_x=gfxSize/2; gfx_y=0;
+gfx_lineto(gfxSize/2,gfxSize,0);
+gfx_x=0; gfx_y=gfxSize/2;
+gfx_lineto(gfxSize,gfxSize/2,0);
+
+gfx_x = gfxSize-20; gfx_y = gfxSize/2;
+gfx_drawchar($'I');
+gfx_drawchar($'N');
+
+gfx_x = gfxSize/2+2; gfx_y = 0;
+gfx_drawchar($'O');
+gfx_drawchar($'U');
+gfx_drawchar($'T');
+
+gfx_r=0.5; gfx_g=1; gfx_b=0; gfx_a=1;
+gfx_x=0; gfx_y=(-distort(-0.99999, s_dist1, k1))*gfxSize/2+gfxSize/2;
+x = -1;
+while(
+    x > 1 ? (x=1);
+    y = -distort(x, s_dist1, k1);
+    gfx_lineto(x*gfxSize/2+gfxSize/2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+gfxSize2 = gfxSize+3;
+gfx_x=gfxSize2; gfx_y=0;
+gfx_rectto(gfx_w + gfxSize2,gfx_h);
+
+gfx_r=gfx_g=gfx_b=0.8; gfx_a=1;
+gfx_x=gfxSize/2 + gfxSize2; gfx_y=0;
+gfx_lineto(gfxSize/2 + gfxSize2,gfxSize,0);
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+gfx_lineto(gfxSize + gfxSize2,gfxSize/2,0);
+
+gfx_x = gfxSize-20 + gfxSize2; gfx_y = gfxSize/2;
+gfx_drawchar($'I');
+gfx_drawchar($'N');
+
+gfx_x = gfxSize/2+2 + gfxSize2; gfx_y = 0;
+gfx_drawchar($'O');
+gfx_drawchar($'U');
+gfx_drawchar($'T');
+
+gfx_r=0.5; gfx_g=1; gfx_b=0; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=(-distort(-0.99999, s_dist2, k2))*gfxSize/2+gfxSize/2;
+x = -1;
+while(
+    x > 1 ? (x=1);
+    y = -distort(x, s_dist2, k2);
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+
+gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+gfxSize2 = gfxSize+gfxSize+6;
+gfx_x=gfxSize2; gfx_y=0;
+gfx_rectto(gfx_w + gfxSize2,gfx_h);
+
+gfx_r=gfx_g=gfx_b=0.8; gfx_a=1;
+gfx_x=gfxSize/2 + gfxSize2; gfx_y=0;
+gfx_lineto(gfxSize/2 + gfxSize2,gfxSize,0);
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+gfx_lineto(gfxSize + gfxSize2,gfxSize/2,0);
+
+gfx_x = gfxSize-20 + gfxSize2; gfx_y = gfxSize/2;
+gfx_drawchar($'I');
+gfx_drawchar($'N');
+
+gfx_x = gfxSize/2+2 + gfxSize2; gfx_y = 0;
+gfx_drawchar($'O');
+gfx_drawchar($'U');
+gfx_drawchar($'T');
+
+gfx_r=0.5; gfx_g=1; gfx_b=0; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=(-distort(-0.99999, s_dist3, k3))*gfxSize/2+gfxSize/2;
+x = -1;
+while(
+    x > 1 ? (x=1);
+    y = -distort(x, s_dist3, k3);
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+
+gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+gfxSize2 = gfxSize+gfxSize+gfxSize+9;
+gfx_x=gfxSize2; gfx_y=0;
+gfx_rectto(gfx_w + gfxSize2,gfx_h);
+
+gfx_r=gfx_g=gfx_b=0.8; gfx_a=1;
+gfx_x=gfxSize/2 + gfxSize2; gfx_y=0;
+//gfx_lineto(gfxSize/2 + gfxSize2,gfxSize,0);
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+gfx_lineto(gfxSize + gfxSize2,gfxSize/2,0);
+
+//gfx_x = gfxSize-20 + gfxSize2; gfx_y = gfxSize/2;
+//gfx_drawchar($'I');
+//gfx_drawchar($'N');
+
+//gfx_x = gfxSize/2+2 + gfxSize2; gfx_y = 0;
+//gfx_drawchar($'O');
+//gfx_drawchar($'U');
+//gfx_drawchar($'T');
+
+function gfx_compute() (
+    splGf = lpf(splGf, splG * input1_scale, s_lpf1_old, s_lpf1_new);
+
+    dGa = ((splG - splG_p) * srate / 5000);
+    splG_p = splG;
+    dGf = lpf(dGf, dGa * input2_scale, s_lpf2_old, s_lpf2_new);
+    dGs = splscale(dGf);
+
+    ddGa = (dGa - dGa_p) * srate / 5000;
+    ddGf = lpf(ddGf, ddGa * input3_scale, s_lpf3_old, s_lpf3_new);
+    ddGs = splscale(ddGf);
+    dGa_p = dGa;
+
+    splG = mix0 * splG +
+           mix1 * distort(splGf, s_dist1, k1) * (multiply1 ? splG : 1) +
+           mix2 * distort(  dGs, s_dist2, k2) * (multiply2 ? splG : 1) +
+           mix3 * distort( ddGs, s_dist3, k3) * (multiply3 ? splG : 1);
+);
+
+gfx_r=0.4; gfx_g=0.4; gfx_b=0.4; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+
+x = -1;
+while(
+    x > 1 ? (x=1);
+
+    splG = sin(x*3.14159265358*2);
+
+    y = -splG;
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+gfx_r=0.5; gfx_g=1; gfx_b=0; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+
+splG_p = dGa_p = ddG_p = 0;
+splGf = dGf = ddGf = 0;
+
+x = -1;
+while(
+    x > 1 ? (x=1);
+
+    splG = sin(x*3.14159265358*2)/4;
+
+    gfx_compute();
+
+    y = -splG * output_scale;
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+//gfx_r=0.5; gfx_g=1; gfx_b=0.5; gfx_a=1;
+//gfx_x=gfxSize2; gfx_y=gfxSize/2;
+//
+//splG_p = dGa_p = ddG_p = 0;
+//splGf = dGf = ddGf = 0;
+//
+//x = -1;
+//while(
+//    x > 1 ? (x=1);
+//
+//    splG = sin(x*3.14159265358*2)/2;
+//
+//    gfx_compute();
+//
+//    y = -splG * output_scale;
+//    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+//    (x+=gfx_step) < gfx_end;
+//);
+
+
+gfx_r=0.5; gfx_g=1; gfx_b=1; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+
+splG_p = dGa_p = ddG_p = 0;
+splGf = dGf = ddGf = 0;
+
+x = -1;
+while(
+    x > 1 ? (x=1);
+
+    splG = sin(x*3.14159265358*2);
+
+    gfx_compute();
+
+    y = -splG * output_scale;
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+gfx_r=1; gfx_g=0.6; gfx_b=1; gfx_a=1;
+gfx_x=gfxSize2; gfx_y=gfxSize/2;
+
+splG_p = dGa_p = ddG_p = 0;
+splGf = dGf = ddGf = 0;
+
+x = -1;
+while(
+    x > 1 ? (x=1);
+
+    splG = sin(x*3.14159265358*4)/2;
+
+    gfx_compute();
+
+    y = -splG * output_scale;
+    gfx_lineto(x*gfxSize/2+gfxSize/2 + gfxSize2,y*gfxSize/2+gfxSize/2,1);
+    (x+=gfx_step) < gfx_end;
+);
+
+
+

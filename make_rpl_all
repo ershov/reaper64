@@ -50,7 +50,7 @@ for f in `find . -name \*.jsfx`; do
       echo "    $NAME"
       ARGS=("${ARGS[@]:1}")
       echo "  <PRESET \`${NAME}\`" >> "$f.rpl" >> "$f.rpl"
-      perl -E '@a=(@ARGV, ("-")x64); say "@a[0..63] '$NAME'";' "$ARGS" | base64 -b 128 | perl -npe '$_="    $_"' >> "$f.rpl"
+      perl -E '@a=(@ARGV, ("-")x64); say "@a[0..63] '$NAME'";' -- "$ARGS" | base64 -b 128 | perl -npe '$_="    $_"' >> "$f.rpl"
       echo "  >" >> "$f.rpl"
     done
     echo ">" >> "$f.rpl"
