@@ -8,7 +8,13 @@ export GEM_HOME=$HOME/bin/gem GEM_PATH=/Library/Ruby/Gems/2.6.0:$HOME/bin/gem PA
 
 export PATH="/opt/homebrew/opt/ruby/bin:$HOME/bin/gem/bin:$PATH"
 
+####
+# brew edit ruby@2.6
+# ... comment the "disabled" line
+# HOMEBREW_NO_INSTALL_FROM_API=1 brew install ruby@2.6
+
 gem install reapack-index
+gem install racc
 brew install pandoc
 
 #echo '#!/bin/bash' > ~/bin/reapack-index
