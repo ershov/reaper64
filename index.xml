@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="9b3479a0e28684bf2de9660670350e11f55c5370">
+<index version="1" name="ERSH plugins and effects" commit="4ea27b1a0fe74766ac919fbf3052c86df4622685">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -374,6 +374,21 @@ v2.1:
 * Increased internal frame rate to 1500 for finer peak resolution.
 * Performance optimization.]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/f4962c42b87100acbcc284269a6500feda219427/JSFX/ersh_TransientController2.jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="ersh_waveShaping.jsfx" type="effect" desc="Waveshaping Distortion 2 by ERSH">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Extended version of standard Waveshaping Distortion.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 This wave shaper also uses 1st and 2nd derivatives of the waveform. Because of extreme sensitivity, it should be put as early as possible in the chain of effects - preferably, the first.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0.0" author="ersh" time="2024-11-27T08:54:22Z">
+        <source>https://github.com/ershov/reaper64/raw/4ea27b1a0fe74766ac919fbf3052c86df4622685/JSFX/ersh_waveShaping.jsfx</source>
       </version>
     </reapack>
   </category>
