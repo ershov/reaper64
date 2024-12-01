@@ -3,17 +3,15 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.0
+  Version: 1.0.1
   About:
     Extended version of standard Waveshaping Distortion.
 
     This wave shaper also uses 1st and 2nd derivatives of the waveform.
     Because of extreme sensitivity, it should be put as early as possible
     in the chain of effects - preferably, the first.
-
   Provides:
     ersh_waveShaping.jsfx.rpl
-
   Changelog:
     v1.0:
     * Initial release
