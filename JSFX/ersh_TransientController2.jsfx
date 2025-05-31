@@ -3,7 +3,7 @@
   Author: ersh
   Licence: Apache 2.0
   REAPER: 6.0
-  Version: 2.1.1
+  Version: 2.2.0
   About:
     Extended version of standard TransientController.
     Screenshot https://i.imgur.com/UMMDxQI.png
@@ -18,6 +18,9 @@
     * Add gain smoothness parameter.
     * Increased internal frame rate to 1500 for finer peak resolution.
     * Performance optimization.
+    v2.2:
+    * Fix handling of release rate.
+    * Add a "Hold" parameter.
 */
 
 // (C) 2007, Michael Gruhn.
@@ -42,14 +45,15 @@ desc:Transient Controller 2
 //tags: processing dynamics transient
 //author: LOSER, ERSH
 
-slider1:0<-100,100,1>Attack (%)
-slider2:0<-100,100,1>Sustain (%)
-slider3:0<-12,6,.1>Output (dB)
-slider4:-30<-1000,-.1,.1>Transient Detector decay
-slider5:-1250<-10000,-.1,.1>Attack Detector decay
-slider6:-3<-100,-.1,.1>Sustain Detector decay
-slider7:0<0,1,1{No,Yes}>Use slow gain release
-slider8:25<1,1000,.1>Gain Release Rate dB/sec
+slider1:sl_attack_pct=0<-100,100,.1>Attack (%)
+slider2:sl_sustain_pct=0<-100,100,.1>Sustain (%)
+slider3:sl_output=0<-12,12,.1>Output (dB)
+slider4:sl_decay_detector=-30<-1000,-.1,.1>Transient Detector decay
+slider5:sl_decay_attack=-1250<-10000,-.1,.1>Attack Detector decay
+slider6:sl_decay_sustain=-3<-100,-.1,.1>Sustain Detector decay
+slider7:sl_release_slow=0<0,1,1{No,Yes}>Use slow gain release
+slider8:sl_release_rate=15<1,1000,.1>Gain Release Rate (dB/sec)
+slider9:sl_hold=0<0,100,.1>Hold (ms)
 
 in_pin:left input
 in_pin:right input
@@ -57,11 +61,11 @@ out_pin:left output
 out_pin:right output
 
 @init
-b1Env1 = -exp(slider4 / srate );
+b1Env1 = -exp(sl_decay_detector / srate );
 a0Env1 = 1.0 + b1Env1;
-b1Env2 = -exp(slider5 / srate );
+b1Env2 = -exp(sl_decay_attack / srate );
 a0Env2 = 1.0 + b1Env2;
-b1Env3 = -exp(slider6 / srate );
+b1Env3 = -exp(sl_decay_sustain / srate );
 a0Env3 = 1.0 + b1Env3;
 gain = 0;
 
@@ -74,35 +78,54 @@ g_idx = 0;
 
 g_spf = srate / g_framerate;  // samples per frame
 g_sample = 0;
+hold_attack = hold_decay = sample = 0;
 
 @slider
-attack=slider1/100;
-sustain=slider2/50;
-vol = 2^(slider3/6);
+//attack=sl_attack_pct/100;
+attack_abs = abs(sl_attack_pct/100);
+attack_sign = sl_attack_pct > 0 ? 1 : sl_attack_pct < 0 ? -1 : 0;
+//sustain=sl_sustain_pct/50;
+sustain_abs = abs(sl_sustain_pct/100);
+sustain_sign = sl_sustain_pct > 0 ? 1 : sl_sustain_pct < 0 ? -1 : 0;
+vol = 2^(sl_output/6);
 
-b1Env1 = -exp(slider4 / srate );
+b1Env1 = -exp(sl_decay_detector / srate );
 a0Env1 = 1.0 + b1Env1;
-b1Env2 = -exp(slider5 / srate );
+b1Env2 = -exp(sl_decay_attack / srate );
 a0Env2 = 1.0 + b1Env2;
-b1Env3 = -exp(slider6 / srate );
+b1Env3 = -exp(sl_decay_sustain / srate );
 a0Env3 = 1.0 + b1Env3;
 
-gain_decay = slider8 / srate;
+gain_decay = sl_release_rate / srate;
+hold_smpl = sl_hold * srate / 1000;
 
 @sample
+(play_state == 1 || play_state == 5) ? sample+=1;
+
 maxSpls = max(abs(spl0),abs(spl1));
-env1 = sqrt(tmpEnv1 = a0Env1*maxSpls - b1Env1*tmpEnv1);
-env2 = sqrt(tmpEnv2 = a0Env2*maxSpls - b1Env2*tmpEnv2);
-env3 = sqrt(tmpEnv3 = a0Env3*maxSpls - b1Env3*tmpEnv3);
+env_detector = sqrt(tmpEnv1 = a0Env1*maxSpls - b1Env1*tmpEnv1);
+env_attack = sqrt(tmpEnv2 = a0Env2*maxSpls - b1Env2*tmpEnv2);
+env_sustain = sqrt(tmpEnv3 = a0Env3*maxSpls - b1Env3*tmpEnv3);
 
-gainAttack = log(max(env2/env1,1))*attack;
-gainSustain = log(max(env3/env1,1))*sustain;
+gainAttackLast = gainAttack;
+gainSustainLast = gainSustain;
 
-gainLast = gain;
-gain = gainAttack + gainSustain;
-slider7 ? gain = gain >= 0 ?
-  max(gain, gainLast - gain_decay) :
-  min(gain, gainLast + gain_decay);
+gainAttack  = log(max(env_attack/env_detector,1))*attack_abs;
+gainSustain = log(max(env_sustain/env_detector,1))*sustain_abs;
+
+hold_smpl > 0 ? (
+  (gainAttack  > gainAttackLast)  ? (hold_attack  = 0; gainAttackLast  = gainAttack)  : (((hold_attack+=1)  < hold_smpl) ? (gainAttack  = gainAttackLast));
+  (gainSustain > gainSustainLast) ? (hold_sustain = 0; gainSustainLast = gainSustain) : (((hold_sustain+=1) < hold_smpl) ? (gainSustain = gainSustainLast));
+) : (
+  hold_attack = hold_sustain = 1;
+);
+
+sl_release_slow ? (
+  hold_attack  >= hold_smpl ? (gainAttack  = max(max(gainAttack,  gainAttackLast  - gain_decay), 0));
+  hold_sustain >= hold_smpl ? (gainSustain = max(max(gainSustain, gainSustainLast - gain_decay), 0));
+);
+
+gain = gainAttack*attack_sign + gainSustain*sustain_sign;
 
 gainV = exp(gain) * vol;
 
@@ -110,9 +133,9 @@ spl0 *= gainV;
 spl1 *= gainV;
 
 play_state == 1 || play_state == 5 ? (g_sample = (g_sample + 1) % g_spf) == 0 ? (
-  0[g_idx] = env1;
-  1[g_idx] = env2;
-  2[g_idx] = env3;
+  0[g_idx] = env_detector;
+  1[g_idx] = env_attack;
+  2[g_idx] = env_sustain;
   3[g_idx] = gain/5 + 0.5;
   g_idx = (g_idx + g_n) % (g_maxx*g_n);
 );
@@ -161,4 +184,6 @@ mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
   val >= 0 ? gfx_drawstr("+");
   gfx_drawnumber(val, 2); gfx_drawstr("dB");
 );
+
+
 
