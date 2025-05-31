@@ -24,7 +24,7 @@
 */
 
 // (C) 2007, Michael Gruhn.
-// (C) 2021, Yury Ershov.
+// (C) 2021-2025, Yury Ershov.
 
 // NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
 // WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
@@ -52,7 +52,7 @@ slider4:sl_decay_detector=-30<-1000,-.1,.1>Transient Detector decay
 slider5:sl_decay_attack=-1250<-10000,-.1,.1>Attack Detector decay
 slider6:sl_decay_sustain=-3<-100,-.1,.1>Sustain Detector decay
 slider7:sl_release_slow=0<0,1,1{No,Yes}>Use slow gain release
-slider8:sl_release_rate=15<1,1000,.1>Gain Release Rate (dB/sec)
+slider8:sl_release_rate=25<1,1000,.1>Gain Release Rate (dB/sec)
 slider9:sl_hold=0<0,100,.1>Hold (ms)
 
 in_pin:left input
@@ -61,24 +61,35 @@ out_pin:left output
 out_pin:right output
 
 @init
-b1Env1 = -exp(sl_decay_detector / srate );
-a0Env1 = 1.0 + b1Env1;
-b1Env2 = -exp(sl_decay_attack / srate );
-a0Env2 = 1.0 + b1Env2;
-b1Env3 = -exp(sl_decay_sustain / srate );
-a0Env3 = 1.0 + b1Env3;
+
+INF=150;
+_INF=-INF;
+LOG10 = log(10);
+
+envDetector_b1 = exp(sl_decay_detector / srate );
+envDetector_a0 = 1.0 - envDetector_b1;
+envAttack_b1 = exp(sl_decay_attack / srate );
+envAttack_a0 = 1.0 - envAttack_b1;
+envSustain_b1 = exp(sl_decay_sustain / srate );
+envSustain_a0 = 1.0 - envSustain_b1;
+env_detector = env_attack = env_sustain = 0;
 gain = 0;
 
 g_maxx = 2000;         // number of points on axis X
 g_framerate = 1500;    // graph frame rate
 g_n = 4;               // number of graphs
-freembuf(g_maxx*g_n + 1);
 memset(0, 0, g_maxx*g_n);
 g_idx = 0;
+
+//freembuf(g_maxx*g_n + 1);
 
 g_spf = srate / g_framerate;  // samples per frame
 g_sample = 0;
 hold_attack = hold_decay = sample = 0;
+
+__v2db = 20/LOG10;
+function v2db(v) ( log(v)*__v2db );
+function db2v(db) ( exp(db/__v2db) );  // = 2^(db/6) =  10 ^ (db/20)
 
 @slider
 //attack=sl_attack_pct/100;
@@ -87,14 +98,14 @@ attack_sign = sl_attack_pct > 0 ? 1 : sl_attack_pct < 0 ? -1 : 0;
 //sustain=sl_sustain_pct/50;
 sustain_abs = abs(sl_sustain_pct/100);
 sustain_sign = sl_sustain_pct > 0 ? 1 : sl_sustain_pct < 0 ? -1 : 0;
-vol = 2^(sl_output/6);
+vol = db2v(sl_output);
 
-b1Env1 = -exp(sl_decay_detector / srate );
-a0Env1 = 1.0 + b1Env1;
-b1Env2 = -exp(sl_decay_attack / srate );
-a0Env2 = 1.0 + b1Env2;
-b1Env3 = -exp(sl_decay_sustain / srate );
-a0Env3 = 1.0 + b1Env3;
+envDetector_b1 = exp(sl_decay_detector / srate );
+envDetector_a0 = 1.0 - envDetector_b1;
+envAttack_b1 = exp(sl_decay_attack / srate );
+envAttack_a0 = 1.0 - envAttack_b1;
+envSustain_b1 = exp(sl_decay_sustain / srate );
+envSustain_a0 = 1.0 - envSustain_b1;
 
 gain_decay = sl_release_rate / srate;
 hold_smpl = sl_hold * srate / 1000;
@@ -102,10 +113,13 @@ hold_smpl = sl_hold * srate / 1000;
 @sample
 (play_state == 1 || play_state == 5) ? sample+=1;
 
-maxSpls = max(abs(spl0),abs(spl1));
-env_detector = sqrt(tmpEnv1 = a0Env1*maxSpls - b1Env1*tmpEnv1);
-env_attack = sqrt(tmpEnv2 = a0Env2*maxSpls - b1Env2*tmpEnv2);
-env_sustain = sqrt(tmpEnv3 = a0Env3*maxSpls - b1Env3*tmpEnv3);
+maxSpl = max(abs(spl0),abs(spl1));
+//env_detector = sqrt(env_detector_tmp = envDetector_a0*maxSpl + envDetector_b1*env_detector_tmp);
+//env_attack = sqrt(env_attack_tmp = envAttack_a0*maxSpl + envAttack_b1*env_attack_tmp);
+//env_sustain = sqrt(env_sustain_tmp = envSustain_a0*maxSpl + envSustain_b1*env_sustain_tmp);
+env_detector = envDetector_a0*maxSpl + envDetector_b1*env_detector;
+env_attack = envAttack_a0*maxSpl + envAttack_b1*env_attack;
+env_sustain = envSustain_a0*maxSpl + envSustain_b1*env_sustain;
 
 gainAttackLast = gainAttack;
 gainSustainLast = gainSustain;
@@ -114,8 +128,8 @@ gainAttack  = log(max(env_attack/env_detector,1))*attack_abs;
 gainSustain = log(max(env_sustain/env_detector,1))*sustain_abs;
 
 hold_smpl > 0 ? (
-  (gainAttack  > gainAttackLast)  ? (hold_attack  = 0; gainAttackLast  = gainAttack)  : (((hold_attack+=1)  < hold_smpl) ? (gainAttack  = gainAttackLast));
-  (gainSustain > gainSustainLast) ? (hold_sustain = 0; gainSustainLast = gainSustain) : (((hold_sustain+=1) < hold_smpl) ? (gainSustain = gainSustainLast));
+  env_attack  > env_detector ? (hold_attack  = 0; gainAttackLast  = gainAttack  = max(gainAttack,  gainAttackLast))  : (hold_attack+=1)  < hold_smpl ? gainAttack  = gainAttackLast;
+  env_sustain > env_detector ? (hold_sustain = 0; gainSustainLast = gainSustain = max(gainSustain, gainSustainLast)) : (hold_sustain+=1) < hold_smpl ? gainSustain = gainSustainLast;
 ) : (
   hold_attack = hold_sustain = 1;
 );
@@ -133,9 +147,9 @@ spl0 *= gainV;
 spl1 *= gainV;
 
 play_state == 1 || play_state == 5 ? (g_sample = (g_sample + 1) % g_spf) == 0 ? (
-  0[g_idx] = env_detector;
-  1[g_idx] = env_attack;
-  2[g_idx] = env_sustain;
+  0[g_idx] = env_detector*5;
+  1[g_idx] = env_attack*5;
+  2[g_idx] = env_sustain*5;
   3[g_idx] = gain/5 + 0.5;
   g_idx = (g_idx + g_n) % (g_maxx*g_n);
 );
