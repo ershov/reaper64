@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="eb4e2ed2077eb5db352f3eef76909d91fe36f042">
+<index version="1" name="ERSH plugins and effects" commit="7d702868e31d35f150934e8b5b4bf24cdb18a621">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -386,6 +386,21 @@ v2.2:
 * Fix handling of release rate.
 * Add a "Hold" parameter.]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/eb4e2ed2077eb5db352f3eef76909d91fe36f042/JSFX/ersh_TransientController2.jsfx</source>
+      </version>
+      <version name="2.3.0" author="ersh" time="2025-05-31T11:45:15Z">
+        <changelog><![CDATA[v2.0:
+* Initial release
+v2.1:
+* Add gain smoothness parameter.
+* Increased internal frame rate to 1500 for finer peak resolution.
+* Performance optimization.
+v2.2:
+* Fix handling of release rate.
+* Add a "Hold" parameter.
+v2.3:
+* Processing in dB, more sensible parameters.
+* Much better output quality (no sudden volume changes).]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/7d702868e31d35f150934e8b5b4bf24cdb18a621/JSFX/ersh_TransientController2.jsfx</source>
       </version>
     </reapack>
     <reapack name="ersh_waveShaping.jsfx" type="effect" desc="Waveshaping Distortion 2 by ERSH">
