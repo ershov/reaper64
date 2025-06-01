@@ -3,7 +3,7 @@
   Author: ersh
   Licence: Apache 2.0
   REAPER: 6.0
-  Version: 2.4.0
+  Version: 2.4.1
   About:
     Extended version of standard TransientController.
     Screenshot https://i.imgur.com/UMMDxQI.png
@@ -57,7 +57,7 @@ slider4:sl_decay_detector=-30<-1000,-.1,.1>Transient Detector decay
 slider5:sl_decay_attack=-1250<-10000,-.1,.1>Attack Detector decay
 slider6:sl_decay_sustain=-3<-100,-.1,.1>Sustain Detector decay
 slider7:sl_release_slow=1<0,1,1{No,Yes}>Use slow gain release
-slider8:sl_release_rate=25<1,1000,.1>Gain Release Rate (dB/sec)
+slider8:sl_release_rate=25<.1,1000.1,.1>Gain Release Rate
 slider9:sl_hold=15<0,100,.1>Hold (ms)
 
 in_pin:left input
@@ -94,9 +94,10 @@ function db2v(db) ( exp(db/__v2db) );  // = 2^(db/6) =  10 ^ (db/20)
 
 @slider
 
-attack_abs = abs(sl_attack_pct/100);
+// __v2db multiplier is not special - just for compatibility with previous versions
+attack_abs = abs(sl_attack_pct/100) * __v2db;
 attack_sign = sl_attack_pct > 0 ? 1 : sl_attack_pct < 0 ? -1 : 0;
-sustain_abs = abs(sl_sustain_pct/100);
+sustain_abs = abs(sl_sustain_pct/100) * __v2db;
 sustain_sign = sl_sustain_pct > 0 ? 1 : sl_sustain_pct < 0 ? -1 : 0;
 vol = db2v(sl_output);
 
@@ -107,7 +108,7 @@ envAttack_a0 = 1.0 - envAttack_b1;
 envSustain_b1 = exp(sl_decay_sustain / srate );
 envSustain_a0 = 1.0 - envSustain_b1;
 
-gain_decay = sl_release_rate / srate;
+gain_decay = sl_release_rate * __v2db / srate;
 hold_smpl = sl_hold * srate / 1000;
 
 @sample
@@ -138,7 +139,7 @@ sl_release_slow ? (
   hold_sustain >= hold_smpl ? (gainSustain = max(min(gainSustain, gainSustainLast + gain_decay), 0));
 );
 
-gain = (gainAttack*attack_sign + gainSustain*sustain_sign) * __v2db;
+gain = gainAttack*attack_sign + gainSustain*sustain_sign;
 
 gainV = db2v(gain) * vol;
 
@@ -188,12 +189,19 @@ graph(1, 1, 0, 0, "Attack (when exceeds Transient)");
 graph(0, 1, 1, 1, "Transient");
 graph(3, 0, 1, 0, "Gain");
 
+gfx_r = 1; gfx_g = 1; gfx_b = 1; gfx_a = 1;
+gfx_x = gfx_w - 200; gfx_y = 4 + 0 * (gfx_texth+4);
+gfx_drawstr("Release Rate: ");
+gfx_drawnumber(sl_release_rate * __v2db, 0);
+gfx_drawstr(" dB/sec");
+
 mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h ? (
+  gfx_r = 0; gfx_g = 1; gfx_b = 0; gfx_a = 1;
   val = 3[(floor(mouse_x*g_maxx/gfx_w)*g_n + g_idx) % (g_maxx*g_n)];
   gfx_circle(mouse_x, g_y(val), 2, 1, 1);
 
   val = (val-0.5)*5*__v2db;
-  gfx_y = 4; gfx_x = gfx_w*3/4;
+  gfx_y = 4; gfx_x = gfx_w/2 - 40;
   val >= 0 ? gfx_drawstr("+");
   gfx_drawnumber(val, 2); gfx_drawstr("dB");
 );
