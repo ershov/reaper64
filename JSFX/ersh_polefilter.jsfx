@@ -1,0 +1,113 @@
+/**
+  JSFX Name: Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH
+  Author: ersh
+  Licence: GPL
+  REAPER: 6.0
+  Version: 1.0.0
+  About:
+    Extended version of standard TransientController.
+  Screenshot: https://i.imgur.com/3cRcrBI.png
+  Link: https://i.imgur.com/3cRcrBI.png
+  Changelog:
+    v1.0:
+    * Initial release
+*/
+
+// (C) 2025 Yury Ershov
+
+// NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+// WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
+// ANY DIRECT OR INDIRECT,  SPECIAL,  INCIDENTAL OR CONSEQUENTIAL DAMAGE ARISING
+// OUT OF  THE  USE  OR INABILITY  TO  USE  THIS PLUG-IN,  COMPUTER FAILTURE  OF
+// MALFUNCTION INCLUDED.  THE USE OF THE SOURCE CODE,  EITHER  PARTIALLY  OR  IN
+// TOTAL, IS ONLY GRANTED,  IF USED IN THE SENSE OF THE AUTHOR'S INTENTION,  AND
+// USED WITH ACKNOWLEDGEMENT OF THE AUTHOR. FURTHERMORE IS THIS PLUG-IN A  THIRD
+// PARTY CONTRIBUTION,  EVEN IF INCLUDED IN REAPER(TM),  COCKOS INCORPORATED  OR
+// ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
+// PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
+// ENTRUST SOMEBODY ELSE WITH DOING SO.
+// 
+// Released under GPL:
+// <http://www.gnu.org/licenses/>.
+
+//===========================================================================
+desc: ERSH Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB
+//tags: filter
+//author: ERSH
+
+slider5:sl_type=0<0,1,1{LP,HP}>Filter Type
+slider10:sl_note=0<-54,67,0.01>Cutoff Note, relative to A4
+slider11:sl_freq=20000<20,20020,0.1>Cutoff frequency, Hz
+slider15:sl_order=1<0,12,1>Filter order
+slider16:sl_slope=6<0,72,6>Slope, dB/octave
+slider30:sl_output=0<-12,48,0.05>Output, dB
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+//===========================================================================
+@init
+
+ext_tail_size = -1;
+
+LOG2 = log(2);
+LOG10 = log(10);
+__v2db = 20/LOG10;
+function v2db(v) ( log(v)*__v2db );
+function db2v(db) ( exp(db/__v2db) );
+
+spl0f=0;
+spl1f=1000;
+
+function onSliders() (
+  // https://en.wikipedia.org/wiki/Low-pass_filter#Discrete-time_realization
+
+  sl_freq_ != sl_freq ?
+    sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
+  sl_note_ != sl_note ?
+    sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
+
+  sl_slope_ != sl_slope ?
+    sl_order_=sl_order = (sl_slope_=sl_slope) / 6 :
+  sl_order_ != sl_order ?
+    sl_slope_=sl_slope = (sl_order_=sl_order) * 6;
+
+  dt = 1/srate;
+  //RC = sl_freq < 20000 ? 1/2/$pi/sl_freq : 0;
+  RC = 1/2/$pi/sl_freq;
+  alpha = dt / (RC + dt);
+  alpha1 = 1 - alpha;
+  out_volume = db2v(sl_output);
+);
+
+onSliders();
+
+//===========================================================================
+@slider
+
+onSliders();
+
+//===========================================================================
+@sample
+
+sl_order > 0 && RC > 0 ? (
+  i=0;
+  loop(sl_order, (
+    spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
+    spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
+    sl_type == 0 ? ( // LP
+      spl0  = spl0f[i];
+      spl1  = spl1f[i];
+    ) : ( // HP
+      spl0 -= spl0f[i];
+      spl1 -= spl1f[i];
+    );
+    i += 1;
+  ));
+);
+
+spl0 *= out_volume;
+spl1 *= out_volume;
+

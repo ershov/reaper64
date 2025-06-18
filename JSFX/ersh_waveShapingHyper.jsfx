@@ -1,0 +1,401 @@
+/**
+  JSFX Name: Hyperbolic Waveshaping Distortion Saturation Maximizer 0-delay by ERSH.
+  Author: ersh
+  Licence: GPL
+  REAPER: 6.0
+  Version: 1.0.0
+  Tags: processing distortion saturation maximizer waveshaper
+  Provides:
+    ersh_waveShapingHyper.jsfx.rpl
+  About:
+    Zero-delay Hyperbolic Waveshaping Distortion Saturation Maximizer by ERSH.
+  Screenshot: https://i.imgur.com/3cRcrBI.png
+  Link: https://i.imgur.com/3cRcrBI.png
+  Changelog:
+    v1.0:
+    * Initial release
+*/
+
+// (C) 2025, Yury Ershov.
+
+// NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+// WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
+// ANY DIRECT OR INDIRECT,  SPECIAL,  INCIDENTAL OR CONSEQUENTIAL DAMAGE ARISING
+// OUT OF  THE  USE  OR INABILITY  TO  USE  THIS PLUG-IN,  COMPUTER FAILTURE  OF
+// MALFUNCTION INCLUDED.  THE USE OF THE SOURCE CODE,  EITHER  PARTIALLY  OR  IN
+// TOTAL, IS ONLY GRANTED,  IF USED IN THE SENSE OF THE AUTHOR'S INTENTION,  AND
+// USED WITH ACKNOWLEDGEMENT OF THE AUTHOR. FURTHERMORE IS THIS PLUG-IN A  THIRD
+// PARTY CONTRIBUTION,  EVEN IF INCLUDED IN REAPER(TM),  COCKOS INCORPORATED  OR
+// ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
+// PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
+// ENTRUST SOMEBODY ELSE WITH DOING SO.
+//
+// Released under GPL:
+// <http://www.gnu.org/licenses/>.
+
+desc:Hyperbolic Waveshaping Distortion Saturation Maximizer 0-delay
+//tags: processing distortion saturation maximizer waveshaper
+//author: ERSH
+
+slider5:sl_input=0<-50,50,.01>Input, dB
+slider10:sl_x1=0.5<0,1,.0001>X
+slider11:sl_y1=0.5<0,1,.0001>Y
+slider12:sl_knee=0.5<0,1,.0001>Knee Size
+// LP filter
+slider20:sl_type=0<0,1,1{LP,HP}>-Filter Type
+slider21:sl_order=0<0,12,1>LP Filter order (0=off)
+slider22:sl_slope=0<0,72,6>-LP Slope, dB/octave
+slider23:sl_note=0<-54,67,0.01>-LP Cutoff Note, relative to A4
+slider24:sl_freq=20020<20,20020,0.1>LP Cutoff frequency, Hz
+// Output
+slider35:sl_makeup=2<0,2,1{None, Match input (compensate for the same percieved volume), Maximize}>Make up output volume mode
+slider36:sl_output=0<-50,50,.01>Output, dB
+// Non-params
+slider40:gfx_freeze=0<0,1,1{No, Yes}>-Freeze graphic to protect from accidental clicks
+slider41:gfx_x2=0<0,1,1{No, Yes}>-Double the graphic size
+slider51:out_percieved_gain=0<-50,50,.0001>-Percieved gain change
+slider52:out_peak_gain=0<-50,50,.0001>-Peak gain change
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.5  - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
+preset:"Maximize1" - - - - 0 - - - - 0.5 1.0 0.4  - - - - - - - 0  0 0 0 15000 - - - - - - - - - - 2 0
+preset:"Maximize2" - - - - 0 - - - - 0.0 1.0 1.0  - - - - - - - 0  6 0 0 15000 - - - - - - - - - - 2 0
+preset:"Distort1"  - - - - 0 - - - - 0.0 0.4 0.3  - - - - - - - 0  8 0 0  7000 - - - - - - - - - - 1 0
+preset:"Distort2"  - - - - 0 - - - - 0.0 1.0 0.4  - - - - - - - 0  5 0 0  6000 - - - - - - - - - - 1 0
+preset:"Distort3"  - - - - 0 - - - - 0.0 0.4 0.25 - - - - - - - 0 12 0 0 10000 - - - - - - - - - - 1 0
+
+@init
+
+last_t = 0;
+
+LOG2 = log(2);
+LOG10 = log(10);
+__v2db = 20/LOG10;
+function v2db(v) ( log(v)*__v2db );
+function db2v(db) ( exp(db/__v2db) );
+
+function hyp0(x) ( -sqrt(a+x*x)*k1 + k2*x );
+function hyp0_inv(x) local (aa gg1 gg2) (
+  gg1 = sl_x1_ / sl_y1_;
+  gg2 = (1 - sl_x1_) / (1 - sl_y1_);
+  aa = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(gg1+gg2);
+  -sqrt(aa+x*x)*(gg1-gg2)/2 + (gg1+gg2)/2*x
+);
+function hyp11(x) ( hyp0(x+hyp_ox)+hyp_oy );
+function distort0(x) ( hyp11(x) );
+function distort(x) ( sl_x1_ != sl_y1_ ? distort0(abs(x))*sign(x) : x );
+
+function clamp(x, v1, v2) ( min(max(x, v1), v2) );
+
+spl0f=spl1f=0;
+
+function sq(x) ( x * x );
+function onSliders() local(eps eps1 _in_corr) (
+  // Graph:
+  // https://graphtoy.com/?f1(x,t)=4*x&v1=true&f2(x,t)=x/3&v2=true&f3(x,t)=-sqrt(0.1+x*x)*(4-1/3)/2%20+%20(4+1/3)/2*x&v3=true&f4(x,t)=f3(x)%20-%20f3(-1/4)&v4=true&f5(x,t)=&v5=true&f6(x,t)=&v6=true&grid=2&coords=-0.3202689745128293,0.010227039245087097,1.952133333333336
+  // https://graphtoy.com/?f1(x,t)=4*x&v1=true&f2(x,t)=x*%E2%85%93&v2=true&f3(x,t)=-sqrt(0.1+x*x)*(4-%E2%85%93)/2+(4+%E2%85%93)/2*x&v3=true&f4(x,t)=f3(x)-f3(-1/4)&v4=true&f5(x,t)=f3(x)%20+%201&v5=true&f6(x,t)=f3(x%20+%20(4*%E2%85%93*sqrt((4-%E2%85%93)%5E2*(0.1*4*%E2%85%93+1)/4%5E2/%E2%85%93%5E2)-4-%E2%85%93)/2/4/%E2%85%93)%20+%201&v6=true&grid=2&coords=-0.03735273128804131,0.2013473513578483,2.598289466666682
+  // https://graphtoy.com/?f1(x,t)=(1+-0.5)*x/(1+-0.5*abs(x))&v1=true&f2(x,t)=(1+1)*x/(1+1*abs(x))&v2=true&f3(x,t)=(1+2)*x/(1+2*abs(x))&v3=true&f4(x,t)=(1+4)*x/(1+4*abs(x))&v4=true&f5(x,t)=(1+8)*x/(1+8*abs(x))&v5=true&f6(x,t)=(1+16)*x/(1+16*abs(x))&v6=true&grid=2&coords=0.015558826506567258,-0.2362980991543182,2.608716496198131
+  // (()=>{window.g1=4; window.g2=1/(1+0.5); window.a=1/50/g1; window.b-1=g1*a; window.b2=g2*a; window.b3=g2*0.575; return 0;})()
+  // g1*x
+  // g2*x
+  // -sqrt(a+x^2)*(g1-g2)/2 + (g1+g2)/2*x
+  // f4(x-1/g1)-f4(-1/g1)
+  // f5(x*(1/g1+1))/f5(1/g1+1)
+
+  eps = 0.000001;
+  eps1 = 1 - eps;
+  sl_x1_ = clamp(sl_x1, eps, eps1);
+  sl_y1_ = clamp(sl_y1, eps, eps1);
+
+  g1 = sl_y1_ / sl_x1_;
+  g2 = (1 - sl_y1_) / (1 - sl_x1_);
+  // https://graphtoy.com/?f1(x,t)=1/pow(8,%201/x-1)&v1=true&f2(x,t)=&v2=false&f3(x,t)=pow(8,%201-1/x)&v3=true&f4(x,t)=&v4=false&f5(x,t)=&v5=false&f6(x,t)=&v6=false&grid=2&coords=0.5047592907940666,0.4214141461465101,1.1019283746556612
+  a = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(g1+g2);  // 0 .. 1
+  k1 = (g1-g2)/2;
+  k2 = (g1+g2)/2;
+
+  g1 >= 1 ? (
+    // https://www.wolframalpha.com/input?i=-sqrt%28a%2Bx*x%29*%28g1-g2%29%2F2+%2B+x*%28g1%2Bg2%29%2F2+%3D+a2%2C+a+%3E+0%2C+g1+%3E+0%2C+0+%3C+g2+%3C+g1%2C+-1+%3C+a2+%3C+0
+    // a>0, -1<a2<0, g1>0, 0<g2<g1, x = (g1 g2 sqrt(((g1 - g2)^2 (a g1 g2 + a2^2))/(g1^2 g2^2)) + a2 g1 + a2 g2)/(2 g1 g2)
+    //hyp_ox = (g1*g2*sqrt(sq(g1-g2)*(a*g1*g2+sq(sl_y1_))/sq(g1)/sq(g2)) - sl_y1_*(g1+g2))/2/g1/g2;
+    hyp_ox = hyp0_inv(-sl_y1_);
+    hyp_oy = sl_y1_;
+  ) : (
+    hyp_ox = -sl_x1_;
+    hyp_oy = -hyp0(-sl_x1_);
+  );
+
+  percieved_gain = distort(0.01)/0.01; // g1
+
+  in_volume = db2v(sl_input);
+  out_volume = db2v(sl_output);
+  sl_makeup == 1 ? (out_volume /= percieved_gain) :
+    sl_makeup == 2 ? (out_volume /= distort(1));
+  out_in_corr = (sl_makeup ? in_volume : 1);
+
+  _in_corr = (sl_makeup ? 1 : in_volume);
+  out_percieved_gain = v2db(percieved_gain*out_volume*_in_corr);
+  out_peak_gain      = v2db(distort(1)    *out_volume*_in_corr);
+
+  // LP filter
+  // https://en.wikipedia.org/wiki/Low-pass_filter#Discrete-time_realization
+
+  sl_freq_ != sl_freq ?
+    sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
+  sl_note_ != sl_note ?
+    sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
+
+  sl_order_ != sl_order ?
+    sl_slope_=sl_slope = (sl_order_=sl_order) * 6 :
+  sl_slope_ != sl_slope ?
+    sl_order_=sl_order = (sl_slope_=sl_slope) / 6;
+
+  dt = 1/srate;
+  RC = 1/2/$pi/sl_freq;
+  alpha = dt / (RC + dt);
+  alpha1 = 1 - alpha;
+);
+
+onSliders();
+
+@slider
+
+onSliders();
+
+@sample
+
+spl0 *= in_volume;
+spl1 *= in_volume;
+spl_in_max = max(max(spl_in_max, spl0), spl1);
+spl_in_min = min(min(spl_in_min, spl0), spl1);
+spl0 = distort(spl0);
+spl1 = distort(spl1);
+spl_out_max = max(max(spl_out_max, spl0), spl1);
+spl_out_min = min(min(spl_out_min, spl0), spl1);
+spl0 *= out_volume/out_in_corr;
+spl1 *= out_volume/out_in_corr;
+
+// LP filter
+sl_order > 0 && RC > 0 ? (
+  i=0;
+  loop(sl_order, (
+    spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
+    spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
+    sl_type == 0 ? ( // LP
+      spl0  = spl0f[i];
+      spl1  = spl1f[i];
+    ) : ( // HP
+      spl0 -= spl0f[i];
+      spl1 -= spl1f[i];
+    );
+    i += 1;
+  ));
+);
+
+@gfx 630 500
+
+mouseDown_last = mouseDown;
+mouseDown = mouse_cap&1;
+//click = (mouse_cap&1) && !(last_cap&1);
+//last_cap = mouse_cap;
+
+function goto(x, y) ( gfx_x = x; gfx_y = y; );
+function setcolor3(r,g,b) ( gfx_r=r; gfx_g=g; gfx_b=b; );
+function setcolor(color) (
+  gfx_r = ((color>>16)&$xFF)/255.0;
+  gfx_g = ((color>>8 )&$xFF)/255.0;
+  gfx_b = ( color     &$xFF)/255.0;
+);
+function gfx_recta(x1,y1, x2,y2) ( gfx_x=x1; gfx_y=y1; gfx_rectto(x2,y2); );
+function gfx_rectac3(x1,y1, x2,y2, r,g,b) ( setcolor3(r,g,b); gfx_recta(x1,y1,x2,y2); );
+function gfx_rectangle(x1,y1, x2,y2) ( goto(x1,y1); gfx_lineto(x2,y1); gfx_lineto(x2,y2); gfx_lineto(x1,y2); gfx_lineto(x1,y1); );
+
+function x2sc(x) ( gfxOX + (x+1)*gfxSize2 );
+function y2sc(y) ( gfxOY + (1-y)*gfxSize2 );
+function sc2x(xsc) ( (xsc - gfxOX)/gfxSize2 - 1 );
+function sc2y(ysc) ( 1 - (ysc - gfxOY)/gfxSize2 );
+function sc_goto(x, y) ( gfx_x = x2sc(x); gfx_y = y2sc(y); );
+function sc_lineto(x, y) ( gfx_lineto(x2sc(x), y2sc(y)); );
+function sc_line(x1,y1, x2,y2) ( gfx_line(x2sc(x1), y2sc(y1), x2sc(x2), y2sc(y2)); );
+function sc_line0(x1,y1, x2,y2) ( gfx_line(x2sc(x1), y2sc(y1), x2sc(x2), y2sc(y2), 0); );
+function sc_rectto(x, y) ( gfx_rectto(x2sc(x)+1, y2sc(y)+1); );
+function sc_recta(x1,y1, x2,y2) ( gfx_x=x2sc(x1); gfx_y=y2sc(y1); sc_rectto(x2,y2); );
+function sc_rectac3(x1,y1, x2,y2, r,g,b) ( setcolor3(r,g,b); sc_recta(x1,y1,x2,y2); );
+function sc_rectangle(x1,y1, x2,y2) ( sc_goto(x1,y1); sc_lineto(x2,y1); sc_lineto(x2,y2); sc_lineto(x1,y2); sc_lineto(x1,y1); );
+
+gfxStep = 3.0/gfx_w*in_volume;
+gfxSize = min(gfx_w-60,gfx_h-1);
+gfxOX = floor((gfx_w-60 - gfxSize)/2);
+gfxOY = floor((gfx_h - gfxSize)/2);
+gfx_x2 ? (
+  gfxOX -= gfxSize;
+  gfxSize = gfxSize*2;
+  spl_in_min = -(spl_in_max = max(spl_in_max, -spl_in_min));
+  spl_out_min = -(spl_out_max = max(spl_out_max, -spl_out_min));
+);
+gfxSize2 = gfxSize/2;
+gfx_a=1;
+
+// Main graph
+
+mouseHold > 0 ||
+  (mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 && mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10) ?
+(
+  // Highlight clickable area
+  gfx_rectac3(gfxOX+gfxSize/2, gfxOY,  gfxOX+gfxSize+1, gfxOY+gfxSize/2+1,  0, 0.07, 0.14);
+  // Grey guides
+  mouseHold ? setcolor3(0.5, 0.4, 0.5) :
+  mouseDown ? setcolor3(0, 0, 0) :
+  setcolor3(0.3, 0.3, 0.3);
+  gfx_y = clamp(mouse_y, gfxOY, gfxOY+gfxSize/2);
+  gfx_line(gfxOX+gfxSize/2, gfx_y, gfxOX+gfxSize, gfx_y);
+  gfx_x = clamp(mouse_x, gfxOX+gfxSize/2, gfxOX+gfxSize);
+  gfx_line(gfx_x, gfxOY, gfx_x, gfxOY+gfxSize);
+);
+
+// Hyperbolic guides
+
+//// Requested initial gain
+setcolor3(0.2, 0.2, 0.2);
+//g1 >= 1 ?
+//  gfx_line(gfxOX + gfxSize/2, gfxOY + gfxSize/2, gfxOX + (1+1/g1)*gfxSize/2, gfxOY) :
+//  gfx_line(gfxOX + gfxSize/2, gfxOY + gfxSize/2, gfxOX + gfxSize, gfxOY + (1-g1)*gfxSize/2);
+
+// Hyperbola assimptots
+//hyp_off_x = sl_x1_ + hyp_ox;
+//g1 >= 1 ? (
+//  gfx_line(gfxOX + (1-hyp_off_x)*gfxSize/2, gfxOY + gfxSize/2, gfxOX + (1-hyp_off_x+1/g1)*gfxSize/2, gfxOY);
+//) : (
+//  1;
+//)
+
+//// Factual initial gain
+setcolor3(0.15, 0.25, 0.35);
+percieved_gain >= 1 ?
+  sc_line0(0, 0, 1/percieved_gain, 1) :
+  sc_line0(0, 0, 1, percieved_gain);
+
+// Axis
+setcolor3(0.5, 0.5, 0.5);
+sc_line0(0, 1, 0, gfx_x2 ? 0 : -1);
+sc_line0(gfx_x2 ? 0 : -1, 0, 1, 0);
+goto(x2sc(1),   y2sc(0)  ); gfx_drawstr("IN",256+2+8,gfx_x, gfx_y);
+goto(x2sc(0)+3, y2sc(1)+1); gfx_drawstr("OUT");
+setcolor3(0.3, 0.3, 0.3);
+sc_rectangle(-1, -1, 1, 1);
+
+// Grey curve
+setcolor3(0.4, 0.5, 0.6);
+goto(-1, 0);
+x = (0-gfxOX-gfxSize/2)*2/gfxSize*in_volume;
+xMax = (gfx_w-gfxOX-gfxSize/2)*2/gfxSize*in_volume;
+while(
+  sc_lineto(x/in_volume, distort(x));
+  (x+=gfxStep) <= in_volume;
+);
+// Grey Meters
+gfx_a = 0.5;
+sc_goto(spl_in_max/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_max)); gfx_lineto(x2sc(0), gfx_y);
+!gfx_x2 ? (
+sc_goto(spl_in_min/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_min)); gfx_lineto(x2sc(0), gfx_y);
+);
+
+gfx_a=1;
+
+// Green curve
+setcolor3(0.5, 1, 0);
+goto(-1, 0);
+x = (0-gfxOX-gfxSize/2)*2/gfxSize*in_volume;
+xMax = (gfx_w-gfxOX-gfxSize/2)*2/gfxSize*in_volume;
+while(
+  sc_lineto(x/in_volume, distort(x)*out_volume);
+  (x+=gfxStep) <= xMax;
+);
+
+// Green Meters
+gfx_a = 0.5;
+sc_goto(spl_in_max/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_max*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+!gfx_x2 ? (
+sc_goto(spl_in_min/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_min*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+);
+
+// Green amplitude meters
+gfx_a=1;
+setcolor3(0.5, 1, 0);
+gfx_recta(x2sc(gfx_x2 ? 0 : spl_in_min/in_volume), y2sc(0)-1, x2sc(spl_in_max/in_volume), y2sc(0)+2);
+gfx_recta(x2sc(0)-1, y2sc(gfx_x2 ? 0 : spl_out_min*out_volume), x2sc(0)+2, y2sc(spl_out_max*out_volume));
+
+(time_precise() - last_t) >= 0.03 ? (
+  last_t = time_precise();
+  spl_in_min = spl_in_max = spl_out_min = spl_out_max = 0;
+);
+
+// White dot
+setcolor3(1,1,1);
+gfx_x = x2sc(sl_x1) - 1;
+gfx_y = y2sc(sl_y1) - 1;
+gfx_rectto(gfx_x+3, gfx_y+3);
+
+mouseDown ? (
+  !mouseDown_last && !gfx_freeze &&
+    mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
+    mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10 ?
+  (
+      mouseDown_t = time_precise();
+  )
+) : (
+  // Not mouseDown
+  mouseDown_t = 0;
+);
+
+// Buttons
+function button(text, x1,y1, x2,y2, width, colorText, colorBg, colorEdge1, colorEdge2) (
+  mouseDown ? (
+    !mouseDown_last ? (this._mouseDownInButton = (mouse_x >= x1 && mouse_x <= x2 && mouse_y >= y1 && mouse_y <= y2));
+  ) : (
+    this._mouseDownInButton = 0;
+  );
+  setcolor(!this._mouseDownInButton ? colorEdge1 : colorEdge2); gfx_triangle(x1,y2, x1,y1, x2,y1);
+  setcolor(!this._mouseDownInButton ? colorEdge2 : colorEdge1); gfx_triangle(x1,y2, x2,y1, x2,y2);
+  x1 += width; y1 += width; x2 -= width; y2 -= width;
+  setcolor(colorBg);    gfx_rect(x1,y1, x2-x1+1,y2-y1+1);
+  goto(x1+1+this._mouseDownInButton*2, y1+2);
+  setcolor(colorText);  gfx_drawstr(text, 5, x2, y2);
+  this.click = !this._mouseDownInButton_last && this._mouseDownInButton;
+  this._mouseDownInButton_last = this._mouseDownInButton;
+  this.click;
+);
+
+gfx_a = 1;
+gfx_measurestr("Percieved gain change: -##.## dB", str_w, str_h);  str_h += 5;
+btn_h = str_h+6;
+x2.button(    "X2",     gfx_w-60,btn_h*0, gfx_w-1,btn_h*1-1, 2, gfx_x2     ? $xFFFFFF : $x000000, gfx_x2     ? $x0040FF : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_x2     = !gfx_x2;
+freeze.button("Freeze", gfx_w-60,btn_h*1, gfx_w-1,btn_h*2-1, 2, gfx_freeze ? $xFFFFFF : $x000000, gfx_freeze ? $xC00000 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_freeze = !gfx_freeze;
+
+// Output parameters
+function draw_params() local(s gain) (
+  gfx_a = 0.4; setcolor3(0.5, 0.5, 0.5);
+  gfx_recta(gfx_w-1-str_w - 10, gfx_h+2-str_h*3 - 10, gfx_w, gfx_h+2-str_h*1 - 3);
+  gfx_a = 1; setcolor3(1,1,1);
+
+  gain = out_percieved_gain; s = gain >= 0 ? $' ' : $'-';
+  goto(gfx_w-5-str_w, gfx_h-1-str_h*3); sprintf(str, "Percieved gain change: %c%05.2f dB", s, abs(gain)); gfx_drawstr(str);
+
+  gain = out_peak_gain;      s = gain >= 0 ? $' ' : $'-';
+  goto(gfx_w-5-str_w, gfx_h-1-str_h*2); sprintf(str, "     Peak gain change: %c%05.2f dB", s, abs(gain)); gfx_drawstr(str);
+);
+draw_params();
+
+mouseHold = mouseDown && mouseDown_t > 0 && time_precise() - mouseDown_t > 0.150;
+
+// Click, Adjust parameters on mouse drag
+mouseHold && !gfx_freeze ? (
+  sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
+  sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
+  onSliders();
+);
+
