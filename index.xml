@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="d7768d725386619efa66aad4119037954d343ece">
+<index version="1" name="ERSH plugins and effects" commit="99112c8869418e8ad33141526351113202f54bf1">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -295,6 +295,24 @@ v1.3.3:
         <source file="ersh_cabinet_emu.jsfx.rpl">https://github.com/ershov/reaper64/raw/f0a8cd7df4e40995f83a50c534bac21348703a30/JSFX/ersh_cabinet_emu.jsfx.rpl</source>
       </version>
     </reapack>
+    <reapack name="ersh_polefilter.jsfx" type="effect" desc="Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Extended version of standard TransientController.\par}
+}
+]]></description>
+        <link rel="website">https://i.imgur.com/3cRcrBI.png</link>
+        <link rel="screenshot">https://i.imgur.com/3cRcrBI.png</link>
+      </metadata>
+      <version name="1.0.0" author="ersh" time="2025-06-18T06:57:20Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/99112c8869418e8ad33141526351113202f54bf1/JSFX/ersh_polefilter.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -456,6 +474,25 @@ v2.4:
 * Initial release]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/b3b29d2c5c4056ead377eaa3e7e6fa565785547b/JSFX/ersh_waveShaping.jsfx</source>
         <source file="ersh_waveShaping.jsfx.rpl">https://github.com/ershov/reaper64/raw/b3b29d2c5c4056ead377eaa3e7e6fa565785547b/JSFX/ersh_waveShaping.jsfx.rpl</source>
+      </version>
+    </reapack>
+    <reapack name="ersh_waveShapingHyper.jsfx" type="effect" desc="Hyperbolic Waveshaping Distortion Saturation Maximizer 0-delay by ERSH.">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Zero-delay Hyperbolic Waveshaping Distortion Saturation Maximizer by ERSH.\par}
+}
+]]></description>
+        <link rel="website">https://i.imgur.com/3cRcrBI.png</link>
+        <link rel="screenshot">https://i.imgur.com/3cRcrBI.png</link>
+      </metadata>
+      <version name="1.0.0" author="ersh" time="2025-06-18T06:57:20Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/99112c8869418e8ad33141526351113202f54bf1/JSFX/ersh_waveShapingHyper.jsfx</source>
+        <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/99112c8869418e8ad33141526351113202f54bf1/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
       </version>
     </reapack>
   </category>
