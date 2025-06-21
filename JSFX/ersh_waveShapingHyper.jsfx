@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.0
+  Version: 1.1.0
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -14,6 +14,8 @@
   Changelog:
     v1.0:
     * Initial release
+    v1.1:
+    * Fix knee size range
 */
 
 // (C) 2025, Yury Ershov.
@@ -61,12 +63,12 @@ in_pin:right input
 out_pin:left output
 out_pin:right output
 
-preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.5  - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
-preset:"Maximize1" - - - - 0 - - - - 0.5 1.0 0.4  - - - - - - - 0  0 0 0 15000 - - - - - - - - - - 2 0
-preset:"Maximize2" - - - - 0 - - - - 0.0 1.0 1.0  - - - - - - - 0  6 0 0 15000 - - - - - - - - - - 2 0
-preset:"Distort1"  - - - - 0 - - - - 0.0 0.4 0.3  - - - - - - - 0  8 0 0  7000 - - - - - - - - - - 1 0
-preset:"Distort2"  - - - - 0 - - - - 0.0 1.0 0.4  - - - - - - - 0  5 0 0  6000 - - - - - - - - - - 1 0
-preset:"Distort3"  - - - - 0 - - - - 0.0 0.4 0.25 - - - - - - - 0 12 0 0 10000 - - - - - - - - - - 1 0
+preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.5   - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
+preset:"Maximize1" - - - - 0 - - - - 0.5 1.0 0.18  - - - - - - - 0  0 0 0 15000 - - - - - - - - - - 2 0
+preset:"Maximize2" - - - - 0 - - - - 0.0 1.0 0.5   - - - - - - - 0  6 0 0 15000 - - - - - - - - - - 2 0
+preset:"Distort1"  - - - - 0 - - - - 0.0 0.4 0.125 - - - - - - - 0  8 0 0  7000 - - - - - - - - - - 1 0
+preset:"Distort2"  - - - - 0 - - - - 0.0 1.0 0.18  - - - - - - - 0  5 0 0  6000 - - - - - - - - - - 1 0
+preset:"Distort3"  - - - - 0 - - - - 0.0 0.4 0.1   - - - - - - - 0 12 0 0 10000 - - - - - - - - - - 1 0
 
 @init
 
@@ -78,11 +80,18 @@ __v2db = 20/LOG10;
 function v2db(v) ( log(v)*__v2db );
 function db2v(db) ( exp(db/__v2db) );
 
+function calc_a(knee,g) (
+  //knee == 0 ? 0 :
+  //knee == 0 ? 0 : (knee == 1 ? 1 : pow(8, 1-1/knee))/g;
+  //1/pow(8,1/x-1)/g;
+  knee <= 0 ? 0 : knee >= 1 ? 999/g : 1/(pow(2,1/knee-1)-1)/g;
+);
 function hyp0(x) ( -sqrt(a+x*x)*k1 + k2*x );
 function hyp0_inv(x) local (aa gg1 gg2) (
   gg1 = sl_x1_ / sl_y1_;
   gg2 = (1 - sl_x1_) / (1 - sl_y1_);
-  aa = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(gg1+gg2);
+  //aa = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(gg1+gg2);
+  aa = calc_a(sl_knee, gg1+gg2);
   -sqrt(aa+x*x)*(gg1-gg2)/2 + (gg1+gg2)/2*x
 );
 function hyp11(x) ( hyp0(x+hyp_ox)+hyp_oy );
@@ -114,7 +123,8 @@ function onSliders() local(eps eps1 _in_corr) (
   g1 = sl_y1_ / sl_x1_;
   g2 = (1 - sl_y1_) / (1 - sl_x1_);
   // https://graphtoy.com/?f1(x,t)=1/pow(8,%201/x-1)&v1=true&f2(x,t)=&v2=false&f3(x,t)=pow(8,%201-1/x)&v3=true&f4(x,t)=&v4=false&f5(x,t)=&v5=false&f6(x,t)=&v6=false&grid=2&coords=0.5047592907940666,0.4214141461465101,1.1019283746556612
-  a = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(g1+g2);  // 0 .. 1
+  //a = sl_knee == 0 ? 0 : (sl_knee == 1 ? 1 : pow(8, 1-1/sl_knee))/(g1+g2);  // 0 .. 1
+  a = calc_a(sl_knee, g1+g2);
   k1 = (g1-g2)/2;
   k2 = (g1+g2)/2;
 
