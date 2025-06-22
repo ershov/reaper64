@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.1.0
+  Version: 1.1.1
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -250,6 +250,27 @@ gfx_x2 ? (
 gfxSize2 = gfxSize/2;
 gfx_a=1;
 
+mouseDown ? (
+  !mouseDown_last && !gfx_freeze &&
+    mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
+    mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10 ?
+  (
+      mouseDown_t = time_precise();
+  )
+) : (
+  // Not mouseDown
+  mouseDown_t = 0;
+);
+
+mouseHold = mouseDown && mouseDown_t > 0 && time_precise() - mouseDown_t > 0.150;
+
+// Click, Adjust parameters on mouse drag
+mouseHold && !gfx_freeze ? (
+  sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
+  sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
+  onSliders();
+);
+
 // Main graph
 
 mouseHold > 0 ||
@@ -349,18 +370,12 @@ setcolor3(1,1,1);
 gfx_x = x2sc(sl_x1) - 1;
 gfx_y = y2sc(sl_y1) - 1;
 gfx_rectto(gfx_x+3, gfx_y+3);
-
-mouseDown ? (
-  !mouseDown_last && !gfx_freeze &&
-    mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
-    mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10 ?
-  (
-      mouseDown_t = time_precise();
-  )
-) : (
-  // Not mouseDown
-  mouseDown_t = 0;
-);
+gfx_x = x2sc(sl_x1) - 4;
+gfx_y = y2sc(sl_y1);
+gfx_lineto(x2sc(sl_x1) + 4, gfx_y);
+gfx_x = x2sc(sl_x1);
+gfx_y = y2sc(sl_y1) - 4;
+gfx_lineto(gfx_x, y2sc(sl_y1) + 4);
 
 // Buttons
 function button(text, x1,y1, x2,y2, width, colorText, colorBg, colorEdge1, colorEdge2) (
@@ -399,13 +414,4 @@ function draw_params() local(s gain) (
   goto(gfx_w-5-str_w, gfx_h-1-str_h*2); sprintf(str, "     Peak gain change: %c%05.2f dB", s, abs(gain)); gfx_drawstr(str);
 );
 draw_params();
-
-mouseHold = mouseDown && mouseDown_t > 0 && time_precise() - mouseDown_t > 0.150;
-
-// Click, Adjust parameters on mouse drag
-mouseHold && !gfx_freeze ? (
-  sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
-  sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
-  onSliders();
-);
 
