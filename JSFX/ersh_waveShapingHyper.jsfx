@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.1.1
+  Version: 1.2.0
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -16,6 +16,8 @@
     * Initial release
     v1.1:
     * Fix knee size range
+    v1.2:
+    * Fix interaction with sliders in graphics section
 */
 
 // (C) 2025, Yury Ershov.
@@ -170,11 +172,20 @@ function onSliders() local(eps eps1 _in_corr) (
   alpha1 = 1 - alpha;
 );
 
-onSliders();
+//onSliders(); // this is automatic
 
 @slider
 
 onSliders();
+
+@block
+
+update ? (
+  sl_x1 = update_sl_x1;
+  sl_y1 = update_sl_y1;
+  onSliders();
+  update = 0;
+);
 
 @sample
 
@@ -266,9 +277,9 @@ mouseHold = mouseDown && mouseDown_t > 0 && time_precise() - mouseDown_t > 0.150
 
 // Click, Adjust parameters on mouse drag
 mouseHold && !gfx_freeze ? (
-  sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
-  sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
-  onSliders();
+  update_sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
+  update_sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
+  (update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1) ? update = 1;
 );
 
 // Main graph
