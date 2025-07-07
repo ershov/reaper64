@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.3.1
+  Version: 1.3.2
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -46,7 +46,7 @@ desc:Hyperbolic Waveshaping Distortion Saturation Maximizer 0-delay
 slider5:sl_input=0<-50,50,.01>Input, dB
 slider10:sl_x1=0.5<0,1,.0001>X
 slider11:sl_y1=0.5<0,1,.0001>Y
-slider12:sl_knee=0.25<0,1,.0001>Knee Size
+slider12:sl_knee=0.2<0,1,.0001>Knee Size
 // LP filter
 slider20:sl_type=0<0,1,1{LP,HP}>-Filter Type
 slider21:sl_order=0<0,12,1>LP Filter order (0=off)
