@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.2.1
+  Version: 1.3.0
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -18,6 +18,8 @@
     * Fix knee size range
     v1.2:
     * Fix interaction with sliders in graphics section
+    v1.3:
+    * Add knee size controll
 */
 
 // (C) 2025, Yury Ershov.
@@ -185,6 +187,7 @@ update ? (
   update = 0;
   sl_x1 = update_sl_x1;
   sl_y1 = update_sl_y1;
+  sl_knee = update_knee;
   onSliders();
 );
 
@@ -281,12 +284,16 @@ mouseHold && !gfx_freeze ? (
   update_sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
   update_sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
   (update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1) ? update = 1;
+) : (
+  update_sl_x1 = sl_x1;
+  update_sl_y1 = sl_y1;
 );
 
 // Main graph
 
-mouseHold > 0 ||
-  (mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 && mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10) ?
+mouseHold > 0 || (!gfx_freeze && !mouseDown &&
+    mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
+    mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10) ?
 (
   // Highlight clickable area
   gfx_rectac3(gfxOX+gfxSize/2, gfxOY,  gfxOX+gfxSize+1, gfxOY+gfxSize/2+1,  0, 0.07, 0.14);
@@ -420,6 +427,37 @@ gfx_measurestr("Percieved gain change: -##.## dB", str_w, str_h);  str_h += 5;
 btn_h = str_h+6;
 x2.button(    "X2",     gfx_w-60,btn_h*0, gfx_w-1,btn_h*1-1, 2, gfx_x2     ? $xFFFFFF : $x000000, gfx_x2     ? $x0040FF : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_x2     = !gfx_x2;
 freeze.button("Freeze", gfx_w-60,btn_h*1, gfx_w-1,btn_h*2-1, 2, gfx_freeze ? $xFFFFFF : $x000000, gfx_freeze ? $xC00000 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_freeze = !gfx_freeze;
+
+// Knee size control
+kneectl.x1 = gfx_w - 55; kneectl.y1 = 60;
+kneectl.x2 = gfx_w - 10; kneectl.y2 = gfx_h - 80;
+mouseDown ? (
+  !mouseDown_last && !gfx_freeze &&
+    mouse_x >= kneectl.x1-10 && mouse_x <= kneectl.x2+10 &&
+    mouse_y >= kneectl.y1-10 && mouse_y <= kneectl.y2+10 ?
+  (
+      kneectl.mouseDown_t = time_precise();
+  )
+) : (
+  // Not mouseDown
+  kneectl.mouseDown_t = 0;
+);
+kneectl.mouseHold = mouseDown && kneectl.mouseDown_t > 0 && time_precise() - kneectl.mouseDown_t > 0.050;
+kneectl.mouseHold && !gfx_freeze ? (
+  update_knee = clamp((kneectl.y2 - mouse_y) / (kneectl.y2 - kneectl.y1), 0, 1);
+  (update_knee != sl_knee) ? update = 1;
+) : update_knee = sl_knee;
+kneectl.mouseHold > 0 || (!gfx_freeze && !mouseDown &&
+    mouse_x >= kneectl.x1-10 && mouse_x <= kneectl.x2+10 &&
+    mouse_y >= kneectl.y1-10 && mouse_y <= kneectl.y2+10) ?
+  setcolor3(0.4, 0.5, 0.6) :
+  setcolor3(0.3, 0.3, 0.3);
+gfx_rectangle(kneectl.x1, kneectl.y1, kneectl.x2, kneectl.y2);
+setcolor3(0.4, 0.5, 0.6);
+i = (kneectl.y2 - kneectl.y1 + 0.5)*sl_knee;
+gfx_rect(kneectl.x1+1, kneectl.y2 - i, kneectl.x2 - kneectl.x1 - 1, i+1);
+setcolor3(1,1,1); goto(kneectl.x1, (kneectl.y1 + kneectl.y2)/2);
+gfx_drawstr("KNEE", 1 + 4 + 256, kneectl.x2, gfx_y);
 
 // Output parameters
 function draw_params() local(s gain) (
