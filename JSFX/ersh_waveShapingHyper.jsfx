@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.3.0
+  Version: 1.3.1
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -270,17 +270,17 @@ mouseDown ? (
     mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
     mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10 ?
   (
-      mouseDown_t = time_precise();
+      graphctl.mouseDown_t = time_precise();
   )
 ) : (
   // Not mouseDown
-  mouseDown_t = 0;
+  graphctl.mouseDown_t = 0;
 );
 
-mouseHold = mouseDown && mouseDown_t > 0 && time_precise() - mouseDown_t > 0.150;
+graphctl.mouseHold = mouseDown && graphctl.mouseDown_t > 0 && time_precise() - graphctl.mouseDown_t > 0.150;
 
 // Click, Adjust parameters on mouse drag
-mouseHold && !gfx_freeze ? (
+graphctl.mouseHold && !gfx_freeze ? (
   update_sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
   update_sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
   (update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1) ? update = 1;
@@ -291,14 +291,14 @@ mouseHold && !gfx_freeze ? (
 
 // Main graph
 
-mouseHold > 0 || (!gfx_freeze && !mouseDown &&
+graphctl.mouseHold > 0 || (!gfx_freeze && !mouseDown &&
     mouse_x >= gfxOX+gfxSize/2-10 && mouse_x <= gfxOX+gfxSize+10 &&
     mouse_y >= gfxOY-10 && mouse_y <= gfxOY+gfxSize/2+10) ?
 (
   // Highlight clickable area
   gfx_rectac3(gfxOX+gfxSize/2, gfxOY,  gfxOX+gfxSize+1, gfxOY+gfxSize/2+1,  0, 0.07, 0.14);
   // Grey guides
-  mouseHold ? setcolor3(0.5, 0.4, 0.5) :
+  graphctl.mouseHold ? setcolor3(0.5, 0.4, 0.5) :
   mouseDown ? setcolor3(0, 0, 0) :
   setcolor3(0.3, 0.3, 0.3);
   gfx_y = clamp(mouse_y, gfxOY, gfxOY+gfxSize/2);
