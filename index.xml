@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="3d452957125144c66f555bd2c7bc6919368f67c6">
+<index version="1" name="ERSH plugins and effects" commit="e01c928c1a47e1e1e326de7d2183ba512b0ebd69">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -519,6 +519,16 @@ v1.2:
 * Fix interaction with sliders in graphics section]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/3d452957125144c66f555bd2c7bc6919368f67c6/JSFX/ersh_waveShapingHyper.jsfx</source>
         <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/3d452957125144c66f555bd2c7bc6919368f67c6/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
+      </version>
+      <version name="1.2.1" author="ersh" time="2025-07-07T19:22:58Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Fix knee size range
+v1.2:
+* Fix interaction with sliders in graphics section]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/e01c928c1a47e1e1e326de7d2183ba512b0ebd69/JSFX/ersh_waveShapingHyper.jsfx</source>
+        <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/e01c928c1a47e1e1e326de7d2183ba512b0ebd69/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
       </version>
     </reapack>
   </category>
