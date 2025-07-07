@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.2.0
+  Version: 1.2.1
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -44,7 +44,7 @@ desc:Hyperbolic Waveshaping Distortion Saturation Maximizer 0-delay
 slider5:sl_input=0<-50,50,.01>Input, dB
 slider10:sl_x1=0.5<0,1,.0001>X
 slider11:sl_y1=0.5<0,1,.0001>Y
-slider12:sl_knee=0.5<0,1,.0001>Knee Size
+slider12:sl_knee=0.25<0,1,.0001>Knee Size
 // LP filter
 slider20:sl_type=0<0,1,1{LP,HP}>-Filter Type
 slider21:sl_order=0<0,12,1>LP Filter order (0=off)
@@ -56,7 +56,7 @@ slider35:sl_makeup=2<0,2,1{None, Match input (compensate for the same percieved 
 slider36:sl_output=0<-50,50,.01>Output, dB
 // Non-params
 slider40:gfx_freeze=0<0,1,1{No, Yes}>-Freeze graphic to protect from accidental clicks
-slider41:gfx_x2=0<0,1,1{No, Yes}>-Double the graphic size
+slider41:gfx_x2=1<0,1,1{No, Yes}>-Double the graphic size
 slider51:out_percieved_gain=0<-50,50,.0001>-Percieved gain change
 slider52:out_peak_gain=0<-50,50,.0001>-Peak gain change
 
@@ -107,6 +107,7 @@ spl0f=spl1f=0;
 function sq(x) ( x * x );
 function onSliders() local(eps eps1 _in_corr) (
   // Graph:
+  // https://graphtoy.com/?f1(x,t)=%E2%85%93*x&v1=true&f2(x,t)=x*4&v2=true&f3(x,t)=sqrt(0.1+x*x)*(%E2%85%93-4)/2+(%E2%85%93+4)/2*x&v3=true&f4(x,t)=f3(x)-f3(-3/4)&v4=false&f5(x,t)=f3(x-1)&v5=false&f6(x,t)=f3(x-1)-f3(-1)&v6=true&grid=2&coords=-0.03735273128804131,0.2013473513578483,2.598289466666682
   // https://graphtoy.com/?f1(x,t)=4*x&v1=true&f2(x,t)=x/3&v2=true&f3(x,t)=-sqrt(0.1+x*x)*(4-1/3)/2%20+%20(4+1/3)/2*x&v3=true&f4(x,t)=f3(x)%20-%20f3(-1/4)&v4=true&f5(x,t)=&v5=true&f6(x,t)=&v6=true&grid=2&coords=-0.3202689745128293,0.010227039245087097,1.952133333333336
   // https://graphtoy.com/?f1(x,t)=4*x&v1=true&f2(x,t)=x*%E2%85%93&v2=true&f3(x,t)=-sqrt(0.1+x*x)*(4-%E2%85%93)/2+(4+%E2%85%93)/2*x&v3=true&f4(x,t)=f3(x)-f3(-1/4)&v4=true&f5(x,t)=f3(x)%20+%201&v5=true&f6(x,t)=f3(x%20+%20(4*%E2%85%93*sqrt((4-%E2%85%93)%5E2*(0.1*4*%E2%85%93+1)/4%5E2/%E2%85%93%5E2)-4-%E2%85%93)/2/4/%E2%85%93)%20+%201&v6=true&grid=2&coords=-0.03735273128804131,0.2013473513578483,2.598289466666682
   // https://graphtoy.com/?f1(x,t)=(1+-0.5)*x/(1+-0.5*abs(x))&v1=true&f2(x,t)=(1+1)*x/(1+1*abs(x))&v2=true&f3(x,t)=(1+2)*x/(1+2*abs(x))&v3=true&f4(x,t)=(1+4)*x/(1+4*abs(x))&v4=true&f5(x,t)=(1+8)*x/(1+8*abs(x))&v5=true&f6(x,t)=(1+16)*x/(1+16*abs(x))&v6=true&grid=2&coords=0.015558826506567258,-0.2362980991543182,2.608716496198131
@@ -181,10 +182,10 @@ onSliders();
 @block
 
 update ? (
+  update = 0;
   sl_x1 = update_sl_x1;
   sl_y1 = update_sl_y1;
   onSliders();
-  update = 0;
 );
 
 @sample
@@ -249,7 +250,7 @@ function sc_rectac3(x1,y1, x2,y2, r,g,b) ( setcolor3(r,g,b); sc_recta(x1,y1,x2,y
 function sc_rectangle(x1,y1, x2,y2) ( sc_goto(x1,y1); sc_lineto(x2,y1); sc_lineto(x2,y2); sc_lineto(x1,y2); sc_lineto(x1,y1); );
 
 gfxStep = 3.0/gfx_w*in_volume;
-gfxSize = min(gfx_w-60,gfx_h-1);
+gfxSize = min(gfx_w-60,gfx_h-10);
 gfxOX = floor((gfx_w-60 - gfxSize)/2);
 gfxOY = floor((gfx_h - gfxSize)/2);
 gfx_x2 ? (
@@ -315,11 +316,19 @@ setcolor3(0.2, 0.2, 0.2);
 //  1;
 //)
 
-//// Factual initial gain
+/*
+//// Initial gain
 setcolor3(0.15, 0.25, 0.35);
 percieved_gain >= 1 ?
   sc_line0(0, 0, 1/percieved_gain, 1) :
   sc_line0(0, 0, 1, percieved_gain);
+
+//// Factual initial gain
+setcolor3(0.15, 0.35, 0.15);
+percieved_gain >= 1 ?
+  sc_line0(0, 0, 1/percieved_gain/out_volume, 1) :
+  sc_line0(0, 0, 1, percieved_gain*out_volume);
+*/
 
 // Axis
 setcolor3(0.5, 0.5, 0.5);
