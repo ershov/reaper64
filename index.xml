@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="e01c928c1a47e1e1e326de7d2183ba512b0ebd69">
+<index version="1" name="ERSH plugins and effects" commit="aa9ae00eeba709bfee4432549e6aa8c266188fab">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -529,6 +529,30 @@ v1.2:
 * Fix interaction with sliders in graphics section]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/e01c928c1a47e1e1e326de7d2183ba512b0ebd69/JSFX/ersh_waveShapingHyper.jsfx</source>
         <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/e01c928c1a47e1e1e326de7d2183ba512b0ebd69/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
+      </version>
+      <version name="1.3.0" author="ersh" time="2025-07-07T20:42:41Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Fix knee size range
+v1.2:
+* Fix interaction with sliders in graphics section
+v1.3:
+* Add knee size controll]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/e32f3d22c0d5f13979cc30d0e0fb93eac302e1f0/JSFX/ersh_waveShapingHyper.jsfx</source>
+        <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/e32f3d22c0d5f13979cc30d0e0fb93eac302e1f0/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
+      </version>
+      <version name="1.3.1" author="ersh" time="2025-07-07T20:47:39Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Fix knee size range
+v1.2:
+* Fix interaction with sliders in graphics section
+v1.3:
+* Add knee size controll]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/aa9ae00eeba709bfee4432549e6aa8c266188fab/JSFX/ersh_waveShapingHyper.jsfx</source>
+        <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/aa9ae00eeba709bfee4432549e6aa8c266188fab/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
       </version>
     </reapack>
   </category>
