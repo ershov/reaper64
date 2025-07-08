@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.3.2
+  Version: 1.3.3
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -104,7 +104,8 @@ function distort(x) ( sl_x1_ != sl_y1_ ? distort0(abs(x))*sign(x) : x );
 
 function clamp(x, v1, v2) ( min(max(x, v1), v2) );
 
-spl0f=spl1f=0;
+spl0f = 0;
+spl1f = 100;
 
 function sq(x) ( x * x );
 function onSliders() local(eps eps1 _in_corr) (
