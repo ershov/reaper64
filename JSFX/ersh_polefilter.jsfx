@@ -82,7 +82,11 @@ function onSliders() (
   out_volume = db2v(sl_output);
 );
 
-onSliders();
+sl_order > 0 ? (
+  i=0; loop(sl_order, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
+);
+
+//onSliders(); // this is automatic
 
 //===========================================================================
 @slider
@@ -93,8 +97,7 @@ onSliders();
 @sample
 
 sl_order > 0 && RC > 0 ? (
-  i=0;
-  loop(sl_order, (
+  i=0; loop(sl_order, (
     spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
     spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
     sl_type == 0 ? ( // LP

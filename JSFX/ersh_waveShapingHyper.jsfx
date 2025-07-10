@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.3.3
+  Version: 1.4.0
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -20,6 +20,8 @@
     * Fix interaction with sliders in graphics section
     v1.3:
     * Add knee size controll
+    v1.4:
+    * Add spectre and wave shape display
 */
 
 // (C) 2025, Yury Ershov.
@@ -59,6 +61,8 @@ slider36:sl_output=0<-50,50,.01>Output, dB
 // Non-params
 slider40:gfx_freeze=0<0,1,1{No, Yes}>-Freeze graphic to protect from accidental clicks
 slider41:gfx_x2=1<0,1,1{No, Yes}>-Double the graphic size
+slider42:gfx_fft=0<0,1,1{No, Yes}>-Show harmonics
+slider43:gfx_sine=0<0,1,1{No, Yes}>-Show waveform
 slider51:out_percieved_gain=0<-50,50,.0001>-Percieved gain change
 slider52:out_peak_gain=0<-50,50,.0001>-Peak gain change
 
@@ -67,7 +71,7 @@ in_pin:right input
 out_pin:left output
 out_pin:right output
 
-preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.5   - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
+preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.25  - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
 preset:"Maximize1" - - - - 0 - - - - 0.5 1.0 0.18  - - - - - - - 0  0 0 0 15000 - - - - - - - - - - 2 0
 preset:"Maximize2" - - - - 0 - - - - 0.0 1.0 0.5   - - - - - - - 0  6 0 0 15000 - - - - - - - - - - 2 0
 preset:"Distort1"  - - - - 0 - - - - 0.0 0.4 0.125 - - - - - - - 0  8 0 0  7000 - - - - - - - - - - 1 0
@@ -106,6 +110,26 @@ function clamp(x, v1, v2) ( min(max(x, v1), v2) );
 
 spl0f = 0;
 spl1f = 100;
+
+fft_size = 2048;
+fft_buf = 10000;
+fft_gfx = fft_buf + fft_size;
+fft_spl0f = fft_gfx + fft_size;
+fft_floor = 120;
+sine_buf = 20000;
+sine_steps = 300;
+sine_spl0f = sine_buf + sine_steps;
+
+function pole_filter(buf, val) local (ii) (
+  sl_order > 0 && RC > 0 ? (
+    ii = 0; loop(sl_order, (
+      buf[ii] = val*alpha + buf[ii]*alpha1;
+      sl_type == 0 ? ( /* LP */ val  = buf[ii];) : ( /* HP */ val -= buf[ii];);
+      ii += 1;
+    ));
+  );
+  val;
+);
 
 function sq(x) ( x * x );
 function onSliders() local(eps eps1 _in_corr) (
@@ -174,6 +198,69 @@ function onSliders() local(eps eps1 _in_corr) (
   RC = 1/2/$pi/sl_freq;
   alpha = dt / (RC + dt);
   alpha1 = 1 - alpha;
+
+  !(sl_order > 0 && RC > 0) ? (
+    // gfx_fft
+    i = 0; loop(fft_size, (fft_buf[i] = distort(sin((i/128)*$pi*2)*in_volume)*out_volume; i+=1;));
+    // gfx_sine
+    i = 0; loop(sine_steps, (sine_buf[i] = distort(sin((i/sine_steps-0.5)*$pi*2)*in_volume)*out_volume; i+=1;));
+  ) : (
+    i = 0; loop(sl_order, ( fft_spl0f[i] = sine_spl0f[i] = 0; i += 1; ));
+
+    // gfx_fft
+    fft_step = $pi*2/128;
+    // Find zero crossing
+    fft_x = 0;
+    // Step from zero
+    loop(32, gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume));
+    // Nagative crossing
+    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) > 0);
+    // Positive crossing
+    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) < 0);
+    i = 0; loop(fft_size, (
+      fft_buf[i] = gfx_spl;
+      i+=1;
+      gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume);
+    ));
+
+    // gfx_sine
+    fft_step = $pi*2/sine_steps;
+    // Find zero crossing
+    fft_x = 0;
+    // Step from zero
+    loop(32, gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume));
+    // Nagative crossing
+    while( (gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) > 0);
+    i = 0; loop(sine_steps, (
+      sine_buf[i] = gfx_spl;
+      i+=1;
+      gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume);
+    ));
+  );
+
+  fft_real(fft_buf, fft_size); fft_permute(fft_buf, fft_size/2);
+
+  fft_max = -1000;
+  i = 0; loop(fft_size/2, (
+    gfx_spl = abs(fft_buf[i])/fft_size/2;
+    gfx_spl = gfx_spl > 0.000001 ? v2db(gfx_spl) : -1000;
+    gfx_spl = gfx_spl/fft_floor + 1;
+    fft_gfx[i] = gfx_spl;
+    fft_max = max(fft_max, gfx_spl);
+    i+=1;
+  ));
+  fft_max = 1 - fft_max;
+  i=0; loop(fft_size/2, ( fft_gfx[i] += fft_max; i+=1;));
+  // Clean up spectre - leave only local maximums
+  i=0; loop(fft_size/2-1, ( fft_gfx[i+1] > fft_gfx[i] ? fft_gfx[i]=0; i+=1;));
+  i=fft_size/2-1; loop(fft_size/2-2, ( fft_gfx[i-1] > fft_gfx[i] ? fft_gfx[i]=0; i-=1;));
+
+  //mem_get_values(fft_gfx, debug0, debug1, debug2, debug3, debug4, debug5, debug6, debug7, debug8, debug9, debug10, debug11, debug12, debug13, debug14, debug15, debug16, debug17, debug18, debug19, debug20, debug21, debug22, debug23, debug24, debug25, debug26, debug27, debug28, debug29, debug30, debug31, debug32, debug33, debug34, debug35, debug36, debug37, debug38, debug39, debug40);
+);
+
+// LP filter
+sl_order > 0 ? (
+  i=0; loop(sl_order, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
 );
 
 //onSliders(); // this is automatic
@@ -207,8 +294,7 @@ spl1 *= out_volume/out_in_corr;
 
 // LP filter
 sl_order > 0 && RC > 0 ? (
-  i=0;
-  loop(sl_order, (
+  i=0; loop(sl_order, (
     spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
     spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
     sl_type == 0 ? ( // LP
@@ -254,8 +340,8 @@ function sc_rectac3(x1,y1, x2,y2, r,g,b) ( setcolor3(r,g,b); sc_recta(x1,y1,x2,y
 function sc_rectangle(x1,y1, x2,y2) ( sc_goto(x1,y1); sc_lineto(x2,y1); sc_lineto(x2,y2); sc_lineto(x1,y2); sc_lineto(x1,y1); );
 
 gfxStep = 3.0/gfx_w*in_volume;
-gfxSize = min(gfx_w-60,gfx_h-10);
-gfxOX = floor((gfx_w-60 - gfxSize)/2);
+gfxSize = min(gfx_w-72,gfx_h-10);
+gfxOX = floor((gfx_w-72 - gfxSize)/2);
 gfxOY = floor((gfx_h - gfxSize)/2);
 gfx_x2 ? (
   gfxOX -= gfxSize;
@@ -284,7 +370,7 @@ graphctl.mouseHold = mouseDown && graphctl.mouseDown_t > 0 && time_precise() - g
 graphctl.mouseHold && !gfx_freeze ? (
   update_sl_x1 = clamp((mouse_x - gfxOX - gfxSize/2) / (gfxSize/2), 0, 1);
   update_sl_y1 = clamp(1 - (mouse_y - gfxOY) / (gfxSize/2), 0, 1);
-  (update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1) ? update = 1;
+  //(update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1) ? update = 1;
 ) : (
   update_sl_x1 = sl_x1;
   update_sl_y1 = sl_y1;
@@ -311,7 +397,7 @@ graphctl.mouseHold > 0 || (!gfx_freeze && !mouseDown &&
 // Hyperbolic guides
 
 //// Requested initial gain
-setcolor3(0.2, 0.2, 0.2);
+//setcolor3(0.2, 0.2, 0.2);
 //g1 >= 1 ?
 //  gfx_line(gfxOX + gfxSize/2, gfxOY + gfxSize/2, gfxOX + (1+1/g1)*gfxSize/2, gfxOY) :
 //  gfx_line(gfxOX + gfxSize/2, gfxOY + gfxSize/2, gfxOX + gfxSize, gfxOY + (1-g1)*gfxSize/2);
@@ -346,6 +432,48 @@ goto(x2sc(1),   y2sc(0)  ); gfx_drawstr("IN",256+2+8,gfx_x, gfx_y);
 goto(x2sc(0)+3, y2sc(1)+1); gfx_drawstr("OUT");
 setcolor3(0.3, 0.3, 0.3);
 sc_rectangle(-1, -1, 1, 1);
+
+// Spectre
+gfx_fft ? (
+  gfx_a = 0.4;  // same color as axis but dimmer
+  x=0; loop(fft_floor/6, (
+    sc_goto(0, 1 - x*6/fft_floor); gfx_lineto(x2sc(1), gfx_y);
+    x+=1;
+  ));
+  gfx_a = 1;
+  setcolor3(0.35,0.35,0.3);
+  sc_goto(1, 1 - 12/fft_floor); gfx_drawstr("-12 dB", 1+4 + 256, gfx_x, gfx_y);
+  sc_goto(1, 1 - 36/fft_floor); gfx_drawstr("-36 dB", 1+4 + 256, gfx_x, gfx_y);
+  sc_goto(1, 1 - 60/fft_floor); gfx_drawstr("-60 dB", 1+4 + 256, gfx_x, gfx_y);
+  sc_goto(1, 1 - 84/fft_floor); gfx_drawstr("-84 dB", 1+4 + 256, gfx_x, gfx_y);
+  setcolor3(0.6,0.3,0.1);
+  x=0; loop(fft_size/2, (
+    fft_gfx[x] >= 0 ? (
+      sc_goto(x/fft_size*2, fft_gfx[x]); gfx_lineto(gfx_x, y2sc(0));
+    );
+    x+=1;
+  ));
+//) : (
+//  gfx_a = 0.4;  // same color as axis but dimmer
+//  x = 0.25;
+//  loop(3, (
+//    sc_line(-1, x, 1, x);
+//    sc_line(-1, x-1, 1, x-1);
+//    sc_line(x, 1, x, -1);
+//    sc_line(x-1, 1, x-1, -1);
+//    x += 0.25;
+//  ));
+//  gfx_a = 1;
+);
+gfx_sine ? (
+  setcolor3(0.9,0.7,0.1);
+  iii = gfx_x2 ? sine_steps/2 : 0;
+  sc_goto((gfx_x2 ? 0 : -1), sine_buf[iii]);
+  while(
+    sc_lineto(iii / sine_steps * 2 - 1, sine_buf[iii]);
+    (iii += 1) < sine_steps;
+  );
+);
 
 // Grey curve
 setcolor3(0.4, 0.5, 0.6);
@@ -426,16 +554,18 @@ function button(text, x1,y1, x2,y2, width, colorText, colorBg, colorEdge1, color
 gfx_a = 1;
 gfx_measurestr("Percieved gain change: -##.## dB", str_w, str_h);  str_h += 5;
 btn_h = str_h+6;
-x2.button(    "X2",     gfx_w-60,btn_h*0, gfx_w-1,btn_h*1-1, 2, gfx_x2     ? $xFFFFFF : $x000000, gfx_x2     ? $x0040FF : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_x2     = !gfx_x2;
-freeze.button("Freeze", gfx_w-60,btn_h*1, gfx_w-1,btn_h*2-1, 2, gfx_freeze ? $xFFFFFF : $x000000, gfx_freeze ? $xC00000 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_freeze = !gfx_freeze;
+freeze.button("Freeze", gfx_w-60,btn_h*0, gfx_w-1,btn_h*1-1, 2, gfx_freeze ? $xFFFFFF : $x000000, gfx_freeze ? $xC00000 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_freeze = !gfx_freeze;
+x2.button(    "X2",     gfx_w-60,btn_h*1, gfx_w-1,btn_h*2-1, 2, gfx_x2     ? $xFFFFFF : $x000000, gfx_x2     ? $x0040FF : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_x2     = !gfx_x2;
+spec.button(  "Hr",     gfx_w-60,btn_h*2, gfx_w-31,btn_h*3-1,2, gfx_fft    ? $xFFFFFF : $x000000, gfx_fft    ? $x994C19 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_fft    = !gfx_fft;
+sine.button(  "Wv",     gfx_w-30,btn_h*2, gfx_w-1 ,btn_h*3-1,2, gfx_sine   ? $xFFFFFF : $x000000, gfx_sine   ? $xF4B219 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_sine   = !gfx_sine;
 
 // Knee size control
-kneectl.x1 = gfx_w - 55; kneectl.y1 = 60;
-kneectl.x2 = gfx_w - 10; kneectl.y2 = gfx_h - 80;
+kneectl.x1 = gfx_w - 55; kneectl.y1 = btn_h*4;
+kneectl.x2 = gfx_w - 10; kneectl.y2 = gfx_h-str_h*5;
 mouseDown ? (
   !mouseDown_last && !gfx_freeze &&
-    mouse_x >= kneectl.x1-10 && mouse_x <= kneectl.x2+10 &&
-    mouse_y >= kneectl.y1-10 && mouse_y <= kneectl.y2+10 ?
+    mouse_x >= kneectl.x1-1 && mouse_x <= kneectl.x2+1 &&
+    mouse_y >= kneectl.y1-5 && mouse_y <= kneectl.y2+5 ?
   (
       kneectl.mouseDown_t = time_precise();
   )
@@ -446,17 +576,17 @@ mouseDown ? (
 kneectl.mouseHold = mouseDown && kneectl.mouseDown_t > 0 && time_precise() - kneectl.mouseDown_t > 0.050;
 kneectl.mouseHold && !gfx_freeze ? (
   update_knee = clamp((kneectl.y2 - mouse_y) / (kneectl.y2 - kneectl.y1), 0, 1);
-  (update_knee != sl_knee) ? update = 1;
+  //(update_knee != sl_knee) ? update = 1;
 ) : update_knee = sl_knee;
 kneectl.mouseHold > 0 || (!gfx_freeze && !mouseDown &&
-    mouse_x >= kneectl.x1-10 && mouse_x <= kneectl.x2+10 &&
-    mouse_y >= kneectl.y1-10 && mouse_y <= kneectl.y2+10) ?
+    mouse_x >= kneectl.x1-1 && mouse_x <= kneectl.x2+1 &&
+    mouse_y >= kneectl.y1-5 && mouse_y <= kneectl.y2+5) ?
   setcolor3(0.4, 0.5, 0.6) :
   setcolor3(0.3, 0.3, 0.3);
 gfx_rectangle(kneectl.x1, kneectl.y1, kneectl.x2, kneectl.y2);
 setcolor3(0.4, 0.5, 0.6);
-i = (kneectl.y2 - kneectl.y1 + 0.5)*sl_knee;
-gfx_rect(kneectl.x1+1, kneectl.y2 - i, kneectl.x2 - kneectl.x1 - 1, i+1);
+iii = (kneectl.y2 - kneectl.y1 + 0.5)*sl_knee;
+gfx_rect(kneectl.x1+1, kneectl.y2 - iii, kneectl.x2 - kneectl.x1 - 1, iii+1);
 setcolor3(1,1,1); goto(kneectl.x1, (kneectl.y1 + kneectl.y2)/2);
 gfx_drawstr("KNEE", 1 + 4 + 256, kneectl.x2, gfx_y);
 
@@ -473,4 +603,7 @@ function draw_params() local(s gain) (
   goto(gfx_w-5-str_w, gfx_h-1-str_h*2); sprintf(str, "     Peak gain change: %c%05.2f dB", s, abs(gain)); gfx_drawstr(str);
 );
 draw_params();
+
+// IMPORTANT! Only do update after the @gfx section is done, otherwise memory will change while we draw!
+(update_sl_x1 != sl_x1 || update_sl_y1 != sl_y1 || update_knee != sl_knee) ? update = 1;
 
