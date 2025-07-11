@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.4.0
+  Version: 1.4.1
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -71,7 +71,7 @@ in_pin:right input
 out_pin:left output
 out_pin:right output
 
-preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.25  - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
+preset:"Default"   - - - - 0 - - - - 0.5 0.5 0.2   - - - - - - - 0  0 0 0 20020 - - - - - - - - - - 2 0
 preset:"Maximize1" - - - - 0 - - - - 0.5 1.0 0.18  - - - - - - - 0  0 0 0 15000 - - - - - - - - - - 2 0
 preset:"Maximize2" - - - - 0 - - - - 0.0 1.0 0.5   - - - - - - - 0  6 0 0 15000 - - - - - - - - - - 2 0
 preset:"Distort1"  - - - - 0 - - - - 0.0 0.4 0.125 - - - - - - - 0  8 0 0  7000 - - - - - - - - - - 1 0
@@ -184,13 +184,13 @@ function onSliders() local(eps eps1 _in_corr) (
   // LP filter
   // https://en.wikipedia.org/wiki/Low-pass_filter#Discrete-time_realization
 
-  sl_freq_ != sl_freq ?
-    sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
+  sl_freq_ != sl_freq || !sl_note ?
+    sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2;
   sl_note_ != sl_note ?
     sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
 
-  sl_order_ != sl_order ?
-    sl_slope_=sl_slope = (sl_order_=sl_order) * 6 :
+  sl_order_ != sl_order || !sl_slope ?
+    sl_slope_=sl_slope = (sl_order_=sl_order) * 6;
   sl_slope_ != sl_slope ?
     sl_order_=sl_order = (sl_slope_=sl_slope) / 6;
 
