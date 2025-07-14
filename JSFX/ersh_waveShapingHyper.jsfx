@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.4.1
+  Version: 1.5
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -22,6 +22,8 @@
     * Add knee size controll
     v1.4:
     * Add spectre and wave shape display
+    v1.5:
+    * Add peaks and volume range display
 */
 
 // (C) 2025, Yury Ershov.
@@ -287,16 +289,27 @@ spl_in_max = max(max(spl_in_max, spl0), spl1);
 spl_in_min = min(min(spl_in_min, spl0), spl1);
 spl0 = distort(spl0);
 spl1 = distort(spl1);
-spl_out_max = max(max(spl_out_max, spl0), spl1);
-spl_out_min = min(min(spl_out_min, spl0), spl1);
+//spl_out_max = max(max(spl_out_max, spl0), spl1);
+//spl_out_min = min(min(spl_out_min, spl0), spl1);
 spl0 *= out_volume/out_in_corr;
 spl1 *= out_volume/out_in_corr;
 
 t = time_precise();
-spl_in_max  > spl_in_max_peak  ? ( spl_in_max_peak  = spl_in_max;  spl_in_max_peak_t  = t; ) : t-spl_in_max_peak_t  > 1 ? spl_in_max_peak  = spl_in_max;
-spl_in_min  < spl_in_min_peak  ? ( spl_in_min_peak  = spl_in_min;  spl_in_min_peak_t  = t; ) : t-spl_in_min_peak_t  > 1 ? spl_in_min_peak  = spl_in_min;
-spl_out_max > spl_out_max_peak ? ( spl_out_max_peak = spl_out_max; spl_out_max_peak_t = t; ) : t-spl_out_max_peak_t > 1 ? spl_out_max_peak = spl_out_max;
-spl_out_min < spl_out_min_peak ? ( spl_out_min_peak = spl_out_min; spl_out_min_peak_t = t; ) : t-spl_out_min_peak_t > 1 ? spl_out_min_peak = spl_out_min;
+spl_in_max  > spl_in_max_peak  ? ( spl_in_max_peak  = spl_in_max;  spl_in_max_peak_t  = t; ) : t-spl_in_max_peak_t  > 2 ? spl_in_max_peak  = spl_in_max;
+spl_in_min  < spl_in_min_peak  ? ( spl_in_min_peak  = spl_in_min;  spl_in_min_peak_t  = t; ) : t-spl_in_min_peak_t  > 2 ? spl_in_min_peak  = spl_in_min;
+
+(t - max_spl_t) >= 0.03 ? (
+  spl_in_max  < spl_in_max_mpeak ? ( spl_in_max_mpeak = spl_in_max;  spl_in_max_mpeak_t = t; ) : t-spl_in_max_mpeak_t > 0.5 ? spl_in_max_mpeak = spl_in_max;
+  spl_in_min  > spl_in_min_mpeak ? ( spl_in_min_mpeak = spl_in_min;  spl_in_min_mpeak_t = t; ) : t-spl_in_min_mpeak_t > 0.5 ? spl_in_min_mpeak = spl_in_min;
+
+  spl_avg_alpha = 0.03 / (1/2/$pi/2 + 0.03);
+  spl_avg_alpha1 = 1 - spl_avg_alpha;
+  spl_in_max_avg  = spl_avg_alpha*spl_in_max  + spl_avg_alpha1*spl_in_max_avg;
+  spl_in_min_avg  = spl_avg_alpha*spl_in_min  + spl_avg_alpha1*spl_in_min_avg;
+
+  max_spl_t = t;
+  spl_in_min = spl_in_max = 0;
+);
 
 // LP filter
 sl_order > 0 && RC > 0 ? (
@@ -355,12 +368,13 @@ gfx_x2 ? (
   gfxOX -= gfxSize;
   gfxSize = gfxSize*2;
   spl_in_min  = -(spl_in_max  = max(spl_in_max,  -spl_in_min));
-  spl_out_min = -(spl_out_max = max(spl_out_max, -spl_out_min));
-  spl_in_min_peak  = -(spl_in_max_peak  = max(spl_in_max_peak,  -spl_in_min_peak));
-  spl_out_min_peak = -(spl_out_max_peak = max(spl_out_max_peak, -spl_out_min_peak));
-  spl_in_min_peak_t  =  spl_in_max_peak_t  = max(spl_in_max_peak_t,  -spl_in_min_peak_t);
-  spl_out_min_peak_t =  spl_out_max_peak_t = max(spl_out_max_peak_t, -spl_out_min_peak_t);
+  spl_in_min_peak   = -(spl_in_max_peak  = max(spl_in_max_peak,   -spl_in_min_peak));
+  spl_in_min_peak_t =  spl_in_max_peak_t = max(spl_in_max_peak_t,  spl_in_min_peak_t);
+  spl_in_min_mpeak   = -(spl_in_max_mpeak  = min(spl_in_max_mpeak,   -spl_in_min_mpeak));
+  spl_in_min_mpeak_t =  spl_in_max_mpeak_t = max(spl_in_max_mpeak_t,  spl_in_min_mpeak_t);
 );
+spl_out_max = distort(spl_in_max);
+spl_out_min = distort(spl_in_min);
 gfxSize2 = gfxSize/2;
 gfx_a=1;
 
@@ -516,10 +530,12 @@ while(
 );
 
 // Green Meters
-gfx_a = 0.5;
-sc_goto(spl_in_max/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_max*out_volume)); gfx_lineto(x2sc(0), gfx_y);
-!gfx_x2 ? (
-sc_goto(spl_in_min/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_min*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+gfx_fft ? (
+  gfx_a = 0.5;
+  sc_goto(spl_in_max/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_max*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  !gfx_x2 ? (
+  sc_goto(spl_in_min/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_min*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  );
 );
 
 // Green amplitude meters
@@ -527,20 +543,41 @@ gfx_a=1;
 gfx_recta(x2sc(gfx_x2 ? 0 : spl_in_min/in_volume), y2sc(0)-1, x2sc(spl_in_max/in_volume), y2sc(0)+2);
 gfx_recta(x2sc(0)-1, y2sc(gfx_x2 ? 0 : spl_out_min*out_volume), x2sc(0)+2, y2sc(spl_out_max*out_volume));
 
-(tt - max_spl_t) >= 0.03 ? (
-  max_spl_t = tt;
-  spl_in_min = spl_in_max = spl_out_min = spl_out_max = 0;
-);
-
 // ...peaks
 !gfx_fft ? (
-  gfx_a=0.4-(tt-spl_in_max_peak_t)*0.25;
-  //gfx_recta(x2sc(gfx_x2 ? 0 : spl_in_min_peak/in_volume), y2sc(0)-1, x2sc(spl_in_max_peak/in_volume), y2sc(0)+2);
-  //gfx_recta(x2sc(0)-1, y2sc(gfx_x2 ? 0 : spl_out_min_peak*out_volume), x2sc(0)+2, y2sc(spl_out_max_peak*out_volume));
-  sc_goto(spl_in_max_peak/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_max_peak*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  // avg
+  gfx_a=0.7;
+  sc_goto(spl_in_max_avg/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_max_avg)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
   !gfx_x2 ? (
-  sc_goto(spl_in_min_peak/in_volume, 0); gfx_lineto(gfx_x, y2sc(spl_out_min_peak*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  sc_goto(spl_in_min_avg/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_min_avg)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
   );
+
+  // min max
+
+  //gfx_a=0.4-(tt-spl_in_max_peak_t)*0.25;
+  //sc_goto(spl_in_max_peak/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_max_peak)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  //!gfx_x2 ? (
+  //sc_goto(spl_in_min_peak/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_min_peak)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  //);
+
+  //gfx_a=0.4-(tt-spl_in_max_mpeak_t)*0.15;
+  //sc_goto(spl_in_max_mpeak/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_max_mpeak)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  //!gfx_x2 ? (
+  //sc_goto(spl_in_min_mpeak/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_min_mpeak)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
+  //);
+
+  //gfx_a = 0.2;
+  //sc_rectangle(spl_in_max_mpeak/in_volume, distort(spl_in_max_peak)*out_volume, spl_in_max_peak/in_volume, distort(spl_in_max_mpeak)*out_volume);
+
+  gfx_a = 0.06;
+  setcolor3(1,1,1);
+  sc_recta(spl_in_max_mpeak/in_volume, distort(spl_in_max_peak)*out_volume, spl_in_max_peak/in_volume, 0);
+  sc_recta(                         0, distort(spl_in_max_peak)*out_volume, spl_in_max_peak/in_volume, distort(spl_in_max_mpeak)*out_volume);
+  !gfx_x2 ? (
+  sc_recta(spl_in_min_mpeak/in_volume, distort(spl_in_min_peak)*out_volume, spl_in_min_peak/in_volume, 0);
+  sc_recta(                         0, distort(spl_in_min_peak)*out_volume, spl_in_min_peak/in_volume, distort(spl_in_min_mpeak)*out_volume);
+  );
+
   gfx_a=1;
 );
 
