@@ -35,6 +35,7 @@ desc: ERSH Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB
 //tags: filter
 //author: ERSH
 
+slider4:sl_transform=0<0,2,1{Basic,Matched-Z,TPT / Bilinear}>Transform Type
 slider5:sl_type=0<0,1,1{LP,HP}>Filter Type
 slider10:sl_note=0<-54,67,0.01>Cutoff Note, relative to A4
 slider11:sl_freq=20000<20,20020,0.1>Cutoff frequency, Hz
@@ -87,11 +88,20 @@ function onSliders() (
   );
   sl_order__ = sl_order_;
 
-  dt = 1/srate;
-  //RC = sl_freq < 20000 ? 1/2/$pi/sl_freq : 0;
-  RC = 1/2/$pi/sl_freq;
-  alpha = dt / (RC + dt);
-  alpha1 = 1 - alpha;
+  sl_transform == 0 ? (
+    // Basic version
+    dt = 1/srate;
+    alpha = dt / (1/2/$pi/sl_freq + dt); // RC = 1/2/$pi/sl_freq;
+    alpha1 = 1 - alpha;
+  ) : sl_transform == 1 ? (
+    // Matched-Z transform version
+    alpha1 = exp(-2 * $pi * sl_freq / srate);
+    alpha = 1 - alpha1;
+  ) : sl_transform == 2 ? (
+    // TPT / Bilinear transform version
+    g = tan($pi * sl_freq / srate);
+    alpha = g / (1 + g);
+  );
 
   out_volume = db2v(sl_output);
 );
@@ -110,10 +120,16 @@ onSliders();
 //===========================================================================
 @sample
 
-sl_order > 0 && RC > 0 ? (
+sl_order > 0 ? (
   i=0; loop(sl_order, (
-    spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
-    spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
+    sl_transform == 0 || sl_transform == 1 ? (
+      spl0f[i] = spl0*alpha + spl0f[i]*alpha1;
+      spl1f[i] = spl1*alpha + spl1f[i]*alpha1;
+    ) : sl_transform == 2 ? ( // TPT / Bilinear
+      spl0f[i] += (spl0 - spl0f[i]) * alpha;
+      spl1f[i] += (spl1 - spl1f[i]) * alpha;
+    );
+
     sl_type == 0 ? ( // LP
       spl0  = spl0f[i];
       spl1  = spl1f[i];
@@ -124,6 +140,7 @@ sl_order > 0 && RC > 0 ? (
     i += 1;
   ));
 );
+
 spl0_last = spl0;
 spl1_last = spl1;
 
