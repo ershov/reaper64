@@ -3,9 +3,9 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.0
+  Version: 1.0.1
   About:
-    Extended version of standard TransientController.
+    Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH
   Screenshot: https://i.imgur.com/3cRcrBI.png
   Link: https://i.imgur.com/3cRcrBI.png
   Changelog:
@@ -26,7 +26,7 @@
 // ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
 // PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
 // ENTRUST SOMEBODY ELSE WITH DOING SO.
-// 
+//
 // Released under GPL:
 // <http://www.gnu.org/licenses/>.
 
@@ -69,22 +69,36 @@ function onSliders() (
   sl_note_ != sl_note ?
     sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
 
+  sl_order__ = sl_order_;
   sl_slope_ != sl_slope ?
     sl_order_=sl_order = (sl_slope_=sl_slope) / 6 :
   sl_order_ != sl_order ?
     sl_slope_=sl_slope = (sl_order_=sl_order) * 6;
+  // for smooth slider transition
+  sl_order__  == 0 ? (
+    spl0f[0] = spl0_last;
+    spl1f[0] = spl1_last;
+    sl_order__ = 1;
+  );
+  while (sl_order__ < sl_order_) (
+    sl_order__ += 1;
+    spl0f[sl_order__] = spl0f[sl_order__-1];
+    spl1f[sl_order__] = spl1f[sl_order__-1];
+  );
+  sl_order__ = sl_order_;
 
   dt = 1/srate;
   //RC = sl_freq < 20000 ? 1/2/$pi/sl_freq : 0;
   RC = 1/2/$pi/sl_freq;
   alpha = dt / (RC + dt);
   alpha1 = 1 - alpha;
+
   out_volume = db2v(sl_output);
 );
 
-sl_order > 0 ? (
-  i=0; loop(sl_order, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
-);
+//sl_order > 0 ? (
+//  i=0; loop(sl_order, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
+//);
 
 //onSliders(); // this is automatic
 
@@ -110,6 +124,8 @@ sl_order > 0 && RC > 0 ? (
     i += 1;
   ));
 );
+spl0_last = spl0;
+spl1_last = spl1;
 
 spl0 *= out_volume;
 spl1 *= out_volume;
