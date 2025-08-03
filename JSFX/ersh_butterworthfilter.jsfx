@@ -1,11 +1,11 @@
 /**
-  JSFX Name: Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH
+  JSFX Name: Zero delay N-Order Butterworth Filter - 6dB, 12dB, ... 72dB by ERSH
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.1
+  Version: 1.0.0
   About:
-    Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH
+    Zero delay N-Order Butterworth Filter - 6dB, 12dB, ... 72dB by ERSH
   Screenshot: https://i.imgur.com/3cRcrBI.png
   Link: https://i.imgur.com/3cRcrBI.png
   Changelog:
@@ -31,13 +31,14 @@
 // <http://www.gnu.org/licenses/>.
 
 //===========================================================================
-desc: ERSH Butterworth Filter - 12dB/octave
+desc: ERSH Butterworth Filter - Variable Order
 //tags: filter
 //author: ERSH
 
-slider5:sl_type=0<0,1,1{LP,HP}>Filter Type
+slider5:sl_type=0<0,1,1{LowPass / HighCut,HighPass / LowCut}>Filter Type
 slider10:sl_note=0<-54,67,0.01>Cutoff Note, relative to A4
 slider11:sl_freq=20000<20,20020,0.1>Cutoff frequency, Hz
+slider15:sl_order=1<0,12,1>Filter order (0 = bypass)
 slider30:sl_output=0<-12,48,0.05>Output, dB
 
 in_pin:left input
@@ -56,12 +57,18 @@ __v2db = 20/LOG10;
 function v2db(v) ( log(v)*__v2db );
 function db2v(db) ( exp(db/__v2db) );
 
-// Biquad state variables
-x1_l = x2_l = y1_l = y2_l = 0;
-x1_r = x2_r = y1_r = y2_r = 0;
+// Biquad state variables for up to 12 sections (24th order)
+// Each section needs: x1, x2, y1, y2 for left and right channels
+x1_l = 0; x2_l = 100; y1_l = 200; y2_l = 300;
+x1_r = 400; x2_r = 500; y1_r = 600; y2_r = 700;
+// Coefficients for each section
+a0_coeffs = 800; a1_coeffs = 900; a2_coeffs = 1000;
+b1_coeffs = 1100; b2_coeffs = 1200;
+
+max_sections = 12; // Maximum number of sections
 
 function onSliders() (
-  // Calculate Butterworth biquad coefficients
+  // Calculate Butterworth biquad coefficients for multiple sections
   // https://en.wikipedia.org/wiki/Butterworth_filter
 
   sl_freq_ != sl_freq ?
@@ -69,32 +76,74 @@ function onSliders() (
   sl_note_ != sl_note ?
     sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
 
-  // Butterworth filter design using bilinear transform
-  wc = 2 * $pi * sl_freq / srate;  // normalized frequency
-  k = tan(wc / 2);                 // bilinear transform coefficient
-  norm = 1 / (1 + sqrt(2) * k + k * k);
+  // Calculate how many biquad sections we need
+  num_sections = min(sl_order, max_sections);
+  num_sections > 2 ? num_sections &= 0xFFFFFFFE; // Ensure even number of sections
 
-  sl_type == 0 ? (
-    // Low-pass coefficients
-    a0 = k * k * norm;
-    a1 = 2 * a0;
-    a2 = a0;
-    b1 = 2 * (k * k - 1) * norm;
-    b2 = (1 - sqrt(2) * k + k * k) * norm;
-  ) : (
-    // High-pass coefficients
-    a0 = 1 * norm;
-    a1 = -2 * a0;
-    a2 = a0;
-    b1 = 2 * (k * k - 1) * norm;
-    b2 = (1 - sqrt(2) * k + k * k) * norm;
+  num_sections > 0 ? (
+    // Butterworth filter design using bilinear transform
+    wc = 2 * $pi * sl_freq / srate;  // normalized frequency
+    k = tan(wc / 2);                 // bilinear transform coefficient
+
+    // Calculate coefficients for each biquad section
+    section = 0;
+    loop(num_sections,
+      // For Butterworth filters, the correct pole angle calculation:
+      // Each section has poles at: exp(j * π * (2*k + order) / (2 * order))
+      // For a 2nd order Butterworth, Q = 1/sqrt(2) = 0.7071
+      // For higher orders, we need to calculate the correct Q for each section
+
+      num_sections == 1 ? (
+        // Single section (2nd order Butterworth)
+        q_factor = 1/sqrt(2);  // 0.7071 - standard 2nd order Butterworth
+      ) : (
+        // Multiple sections - calculate pole angles for Butterworth filter
+        // For an N-th order Butterworth, poles are at angles: (2k+1)*π/(2N)
+        total_order = 2 * num_sections;  // Total filter order
+
+        // Calculate pole angle for this biquad pair
+        pole_angle = (2 * section + 1) * $pi / total_order;
+
+        // For poles very close to ±j (imaginary axis), use special handling
+        abs(cos(pole_angle)) < 0.01 ? (
+          // Near imaginary axis - use high Q but not infinite
+          q_factor = 50;
+        ) : (
+          // Normal case: Q = 1/(2*cos(θ))
+          q_factor = 1 / (2 * abs(cos(pole_angle)));
+        );
+
+        // Safety clamp
+        q_factor = max(min(q_factor, 50), 0.1);
+      );
+
+      norm = 1 / (1 + k / q_factor + k * k);
+
+      sl_type == 0 ? (
+        // Low-pass coefficients
+        a0_coeffs[section] = k * k * norm;
+        a1_coeffs[section] = 2 * a0_coeffs[section];
+        a2_coeffs[section] = a0_coeffs[section];
+        b1_coeffs[section] = 2 * (k * k - 1) * norm;
+        b2_coeffs[section] = (1 - k / q_factor + k * k) * norm;
+      ) : (
+        // High-pass coefficients
+        a0_coeffs[section] = 1 * norm;
+        a1_coeffs[section] = -2 * a0_coeffs[section];
+        a2_coeffs[section] = a0_coeffs[section];
+        b1_coeffs[section] = 2 * (k * k - 1) * norm;
+        b2_coeffs[section] = (1 - k / q_factor + k * k) * norm;
+      );
+
+      section += 1;
+    );
   );
 
   out_volume = db2v(sl_output);
 );
 
-//sl_order > 0 ? (
-//  i=0; loop(sl_order, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
+//num_sections > 0 ? (
+//  i=0; loop(num_sections, ( spl0f[i] = spl1f[i] = 0; i += 1; ));
 //);
 
 //onSliders(); // this is automatic
@@ -107,24 +156,47 @@ onSliders();
 //===========================================================================
 @sample
 
-// Butterworth biquad implementation
-// Direct Form II: y[n] = a0*x[n] + a1*x[n-1] + a2*x[n-2] - b1*y[n-1] - b2*y[n-2]
+// Process through cascaded Butterworth biquad sections
+num_sections > 0 ? (
+  // Start with input samples
+  in_l = spl0;
+  in_r = spl1;
 
-// Left channel
-out_l = a0 * spl0 + a1 * x1_l + a2 * x2_l - b1 * y1_l - b2 * y2_l;
-x2_l = x1_l;
-x1_l = spl0;
-y2_l = y1_l;
-y1_l = out_l;
-spl0 = out_l;
+  // Process through each biquad section
+  section = 0;
+  loop(num_sections,
+    // Left channel
+    out_l = a0_coeffs[section] * in_l + a1_coeffs[section] * x1_l[section] + a2_coeffs[section] * x2_l[section]
+            - b1_coeffs[section] * y1_l[section] - b2_coeffs[section] * y2_l[section];
 
-// Right channel
-out_r = a0 * spl1 + a1 * x1_r + a2 * x2_r - b1 * y1_r - b2 * y2_r;
-x2_r = x1_r;
-x1_r = spl1;
-y2_r = y1_r;
-y1_r = out_r;
-spl1 = out_r;
+    // Safety check to prevent runaway
+    abs(out_l) > 10 ? out_l = sign(out_l) * 10;
+
+    x2_l[section] = x1_l[section];
+    x1_l[section] = in_l;
+    y2_l[section] = y1_l[section];
+    y1_l[section] = out_l;
+    in_l = out_l;  // Output becomes input for next section
+
+    // Right channel
+    out_r = a0_coeffs[section] * in_r + a1_coeffs[section] * x1_r[section] + a2_coeffs[section] * x2_r[section]
+            - b1_coeffs[section] * y1_r[section] - b2_coeffs[section] * y2_r[section];
+
+    // Safety check to prevent runaway
+    abs(out_r) > 10 ? out_r = sign(out_r) * 10;
+
+    x2_r[section] = x1_r[section];
+    x1_r[section] = in_r;
+    y2_r[section] = y1_r[section];
+    y1_r[section] = out_r;
+    in_r = out_r;  // Output becomes input for next section
+
+    section += 1;
+  );
+
+  spl0 = in_l;
+  spl1 = in_r;
+);
 
 spl0 *= out_volume;
 spl1 *= out_volume;
