@@ -67,77 +67,101 @@ b1_coeffs = 1100; b2_coeffs = 1200;
 
 max_sections = 12; // Maximum number of sections
 
+// Variables to track slider changes
+sl_type_ = -1;
+sl_order_ = -1;
+sl_freq_ = -1;
+sl_note_ = -1;
+
 function onSliders() (
   // Calculate Butterworth biquad coefficients for multiple sections
   // https://en.wikipedia.org/wiki/Butterworth_filter
 
   sl_freq_ != sl_freq ?
-    sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
+    //sl_note_=sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
+    sl_note = 12*log((sl_freq_=sl_freq)/440)/LOG2 :
   sl_note_ != sl_note ?
-    sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
+    //sl_freq_=sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
+    sl_freq = exp((sl_note_=sl_note)/12*LOG2)*440;
 
   // Calculate how many biquad sections we need
   num_sections = min(sl_order, max_sections);
-  num_sections > 2 ? num_sections &= 0xFFFFFFFE; // Ensure even number of sections
+  //num_sections > 2 ? num_sections &= 0xFFFFFFFE; // Ensure even number of sections
 
-  num_sections > 0 ? (
-    // Butterworth filter design using bilinear transform
-    wc = 2 * $pi * sl_freq / srate;  // normalized frequency
-    k = tan(wc / 2);                 // bilinear transform coefficient
+  sl_type != sl_type_ ||
+  sl_order != sl_order_ ||
+  sl_freq != sl_freq_ || sl_note != sl_note_ ? (
+    //// Calculate how many biquad sections we need
+    //num_sections = min(sl_order, max_sections);
+    ////num_sections > 2 ? num_sections &= 0xFFFFFFFE; // Ensure even number of sections
 
-    // Calculate coefficients for each biquad section
-    section = 0;
-    loop(num_sections,
-      // For Butterworth filters, the correct pole angle calculation:
-      // Each section has poles at: exp(j * π * (2*k + order) / (2 * order))
-      // For a 2nd order Butterworth, Q = 1/sqrt(2) = 0.7071
-      // For higher orders, we need to calculate the correct Q for each section
+    //num_sections > 0 ? (
+      // Butterworth filter design using proper pole placement
+      wc = 2 * $pi * min(sl_freq, srate*0.99) / srate;  // normalized frequency, limited to prevent aliasing
 
-      num_sections == 1 ? (
-        // Single section (2nd order Butterworth)
-        q_factor = 1/sqrt(2);  // 0.7071 - standard 2nd order Butterworth
-      ) : (
-        // Multiple sections - calculate pole angles for Butterworth filter
-        // For an N-th order Butterworth, poles are at angles: (2k+1)*π/(2N)
-        total_order = 2 * num_sections;  // Total filter order
-
-        // Calculate pole angle for this biquad pair
-        pole_angle = (2 * section + 1) * $pi / total_order;
-
-        // For poles very close to ±j (imaginary axis), use special handling
-        abs(cos(pole_angle)) < 0.01 ? (
-          // Near imaginary axis - use high Q but not infinite
-          q_factor = 50;
-        ) : (
-          // Normal case: Q = 1/(2*cos(θ))
-          q_factor = 1 / (2 * abs(cos(pole_angle)));
-        );
+      // Calculate coefficients for each biquad section
+      section = 0;
+      loop(max_sections,  // fill in all sections, even if not used
+        // For Butterworth filters: Q = 1/(2*cos((2k+1)*π/(4N))) where N is total order
+        total_order = 2 * num_sections;
+        k = section; // section index
+        q_factor = 1 / (2 * cos((2*k + 1) * $pi / (2 * total_order)));
 
         // Safety clamp
-        q_factor = max(min(q_factor, 50), 0.1);
+        q_factor = max(min(q_factor, 100), 0.1);
+
+        // Use Robert Bristow-Johnson's cookbook formulas
+        w0 = wc;  // Use the same cutoff for all sections
+        cosw0 = cos(w0);
+        sinw0 = sin(w0);
+        alpha = sinw0 / (2 * q_factor);
+
+        sl_type == 0 ? (
+          // Low-pass coefficients
+          b0 = (1 - cosw0) / 2;
+          b1 = 1 - cosw0;
+          b2 = (1 - cosw0) / 2;
+          a0 = 1 + alpha;
+          a1 = -2 * cosw0;
+          a2 = 1 - alpha;
+        ) : (
+          // High-pass coefficients
+          b0 = (1 + cosw0) / 2;
+          b1 = -(1 + cosw0);
+          b2 = (1 + cosw0) / 2;
+          a0 = 1 + alpha;
+          a1 = -2 * cosw0;
+          a2 = 1 - alpha;
+        );
+
+        // Normalize and store coefficients
+        a0_coeffs[section] = b0 / a0;
+        a1_coeffs[section] = b1 / a0;
+        a2_coeffs[section] = b2 / a0;
+        b1_coeffs[section] = a1 / a0;
+        b2_coeffs[section] = a2 / a0;
+
+        section += 1;
       );
+    //);
 
-      norm = 1 / (1 + k / q_factor + k * k);
-
-      sl_type == 0 ? (
-        // Low-pass coefficients
-        a0_coeffs[section] = k * k * norm;
-        a1_coeffs[section] = 2 * a0_coeffs[section];
-        a2_coeffs[section] = a0_coeffs[section];
-        b1_coeffs[section] = 2 * (k * k - 1) * norm;
-        b2_coeffs[section] = (1 - k / q_factor + k * k) * norm;
-      ) : (
-        // High-pass coefficients
-        a0_coeffs[section] = 1 * norm;
-        a1_coeffs[section] = -2 * a0_coeffs[section];
-        a2_coeffs[section] = a0_coeffs[section];
-        b1_coeffs[section] = 2 * (k * k - 1) * norm;
-        b2_coeffs[section] = (1 - k / q_factor + k * k) * norm;
+    // Initialize sample buffers to prevent artifacts on parameter change.
+    // Preserve meaningful values for lower orders.
+    sl_type != sl_type_ || sl_order != sl_order_ && num_sections < max_sections ? (
+      i = num_sections+1;
+      loop(max_sections - num_sections,
+        x1_l[i] = x2_l[i] = y1_l[i] = y2_l[i] = 0;
+        x1_r[i] = x2_r[i] = y1_r[i] = y2_r[i] = 0;
+        i += 1;
       );
-
-      section += 1;
     );
   );
+
+  // Update trackers
+  sl_type_ = sl_type;
+  sl_order_ = sl_order;
+  sl_freq_ = sl_freq;
+  sl_note_ = sl_note;
 
   out_volume = db2v(sl_output);
 );
@@ -223,7 +247,7 @@ loop(8,
 
 // 100Hz steps
 gfx_freq = 100;
-loop(10,
+loop(9,
   gfx_freq_lines[gfx_freq_count] = gfx_freq;
   gfx_freq_count += 1;
   gfx_freq += 100;
@@ -257,64 +281,55 @@ loop(5,
 );
 
 // Calculate and draw frequency response
-sl_order > 0 ? (
+num_sections > 0 ? (
   gfx_r = 1.0; gfx_g = 0.8; gfx_b = 0.2; gfx_a = 1.0;
 
   gfx_pixel = 0;
   loop(gfx_w,
     // Convert pixel position to frequency (log scale from 20Hz to 20kHz)
-    gfx_freq = 20 * exp(gfx_pixel * log(1000) / gfx_w);  // 20Hz to 20kHz
+    gfx_freq = 20 * exp(gfx_pixel * log(1000) / gfx_w);
+
+    // Calculate total magnitude in dB by summing the dB response of each section
+    gfx_total_mag_db = 0;
 
     // Calculate complex response for this frequency
     gfx_omega = 2 * $pi * gfx_freq / srate;
-    gfx_z_real = cos(gfx_omega);
-    gfx_z_imag = sin(gfx_omega);
 
-    // Initialize response (start with unity)
-    gfx_h_real = 1.0;
-    gfx_h_imag = 0.0;
+    // z^-1 = e^(-jω)
+    gfx_z_inv_real = cos(gfx_omega);
+    gfx_z_inv_imag = -sin(gfx_omega);
 
-    // Multiply response of each biquad section
+    // z^-2 = e^(-2jω)
+    gfx_z_inv2_real = cos(2*gfx_omega);
+    gfx_z_inv2_imag = -sin(2*gfx_omega);
+
     gfx_section = 0;
     loop(num_sections,
-      // Calculate H(z) = (a0 + a1*z^-1 + a2*z^-2) / (1 + b1*z^-1 + b2*z^-2)
-      // where z = e^(jω)
+      // Numerator: b0 + b1*z^-1 + b2*z^-2
+      gfx_num_real = a0_coeffs[gfx_section] + a1_coeffs[gfx_section] * gfx_z_inv_real + a2_coeffs[gfx_section] * gfx_z_inv2_real;
+      gfx_num_imag = a1_coeffs[gfx_section] * gfx_z_inv_imag + a2_coeffs[gfx_section] * gfx_z_inv2_imag;
+      gfx_num_mag_sq = gfx_num_real*gfx_num_real + gfx_num_imag*gfx_num_imag;
 
-      // Numerator: a0 + a1*z^-1 + a2*z^-2
-      gfx_num_real = a0_coeffs[gfx_section] + a1_coeffs[gfx_section] * gfx_z_real + a2_coeffs[gfx_section] * (gfx_z_real*gfx_z_real - gfx_z_imag*gfx_z_imag);
-      gfx_num_imag = a1_coeffs[gfx_section] * (-gfx_z_imag) + a2_coeffs[gfx_section] * (-2*gfx_z_real*gfx_z_imag);
-
-      // Denominator: 1 + b1*z^-1 + b2*z^-2
-      gfx_den_real = 1 + b1_coeffs[gfx_section] * gfx_z_real + b2_coeffs[gfx_section] * (gfx_z_real*gfx_z_real - gfx_z_imag*gfx_z_imag);
-      gfx_den_imag = b1_coeffs[gfx_section] * (-gfx_z_imag) + b2_coeffs[gfx_section] * (-2*gfx_z_real*gfx_z_imag);
-
-      // Complex division: (num_real + j*num_imag) / (den_real + j*den_imag)
+      // Denominator: 1 + a1*z^-1 + a2*z^-2
+      gfx_den_real = 1 + b1_coeffs[gfx_section] * gfx_z_inv_real + b2_coeffs[gfx_section] * gfx_z_inv2_real;
+      gfx_den_imag = b1_coeffs[gfx_section] * gfx_z_inv_imag + b2_coeffs[gfx_section] * gfx_z_inv2_imag;
       gfx_den_mag_sq = gfx_den_real*gfx_den_real + gfx_den_imag*gfx_den_imag;
-      gfx_den_mag_sq < 0.0000001 ? gfx_den_mag_sq = 0.0000001;  // Prevent division by zero
 
-      gfx_section_real = (gfx_num_real*gfx_den_real + gfx_num_imag*gfx_den_imag) / gfx_den_mag_sq;
-      gfx_section_imag = (gfx_num_imag*gfx_den_real - gfx_num_real*gfx_den_imag) / gfx_den_mag_sq;
+      // Prevent division by zero for this section's magnitude calculation
+      gfx_den_mag_sq < 0.000000000001 ? gfx_den_mag_sq = 0.000000000001;
 
-      // Multiply with accumulated response: h *= section_response
-      gfx_new_h_real = gfx_h_real * gfx_section_real - gfx_h_imag * gfx_section_imag;
-      gfx_new_h_imag = gfx_h_real * gfx_section_imag + gfx_h_imag * gfx_section_real;
-      gfx_h_real = gfx_new_h_real;
-      gfx_h_imag = gfx_new_h_imag;
+      // Add this section's dB magnitude to the total
+      gfx_total_mag_db += v2db(sqrt(gfx_num_mag_sq / gfx_den_mag_sq));
 
       gfx_section += 1;
     );
 
-    // Calculate magnitude in dB
-    gfx_mag_sq = gfx_h_real*gfx_h_real + gfx_h_imag*gfx_h_imag;
-    gfx_mag_sq < 0.0000001 ? gfx_mag_sq = 0.0000001;  // Prevent log(0)
-    gfx_mag_db = 10 * log(gfx_mag_sq) / log(10);
-
-    // Convert dB to pixel position (0dB at center, ±60dB range)
-    gfx_y_curve = gfx_h/2 - gfx_mag_db * gfx_h / 120;  // 120dB total range (-60 to +60)
+    // Convert total dB to pixel position (0dB at center, ±60dB range)
+    gfx_y_curve = gfx_h/2 - gfx_total_mag_db * gfx_h / 120;
     gfx_y_curve = max(0, min(gfx_h, gfx_y_curve));
 
     // Draw line
-    gfx_pixel == 0 ? gfx_x = gfx_pixel : gfx_lineto(gfx_pixel, gfx_y_curve);
+    gfx_pixel == 0 ? gfx_x = gfx_pixel : gfx_lineto(gfx_pixel, gfx_y_curve+0.5);
     gfx_y = gfx_y_curve;
 
     gfx_pixel += 1;
@@ -327,12 +342,14 @@ gfx_x = 5; gfx_y = 5;
 gfx_printf("20Hz");
 gfx_x = gfx_w - 40; gfx_y = 5;
 gfx_printf("20KHz");
-
-gfx_x = log(100 / 20) * gfx_w / log(1000) - 10; gfx_y = 5;
+gfx_x = log(100 / 20) * gfx_w / log(1000) - 10;
 gfx_printf("100Hz");
-
-gfx_x = log(1000 / 20) * gfx_w / log(1000) - 10; gfx_y = 5;
+gfx_x = log(300 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("300Hz");
+gfx_x = log(1000 / 20) * gfx_w / log(1000) - 10;
 gfx_printf("1KHz");
+gfx_x = log(3000 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("3KHz");
 
 // Draw cutoff frequency indicator
 gfx_cutoff_x = log(sl_freq / 20) * gfx_w / log(1000);

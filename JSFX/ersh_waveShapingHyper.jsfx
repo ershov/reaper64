@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.5
+  Version: 1.5.1
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -306,6 +306,8 @@ spl_in_min  < spl_in_min_peak  ? ( spl_in_min_peak  = spl_in_min;  spl_in_min_pe
   spl_avg_alpha1 = 1 - spl_avg_alpha;
   spl_in_max_avg  = spl_avg_alpha*spl_in_max  + spl_avg_alpha1*spl_in_max_avg;
   spl_in_min_avg  = spl_avg_alpha*spl_in_min  + spl_avg_alpha1*spl_in_min_avg;
+  //spl_in_max_avg  = max(spl_in_max, spl_avg_alpha*spl_in_max  + spl_avg_alpha1*spl_in_max_avg);
+  //spl_in_min_avg  = min(spl_in_min, spl_avg_alpha*spl_in_min  + spl_avg_alpha1*spl_in_min_avg);
 
   max_spl_t = t;
   spl_in_min = spl_in_max = 0;
@@ -616,8 +618,8 @@ gfx_measurestr("Percieved gain change: -##.## dB", str_w, str_h);  str_h += 5;
 btn_h = str_h+6;
 freeze.button("Freeze", gfx_w-60,btn_h*0, gfx_w-1,btn_h*1-1, 2, gfx_freeze ? $xFFFFFF : $x000000, gfx_freeze ? $xC00000 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_freeze = !gfx_freeze;
 x2.button(    "X2",     gfx_w-60,btn_h*1, gfx_w-1,btn_h*2-1, 2, gfx_x2     ? $xFFFFFF : $x000000, gfx_x2     ? $x0040FF : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_x2     = !gfx_x2;
-spec.button(  "Hr",     gfx_w-60,btn_h*2, gfx_w-31,btn_h*3-1,2, gfx_fft    ? $xFFFFFF : $x000000, gfx_fft    ? $x994C19 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_fft    = !gfx_fft;
-sine.button(  "Wv",     gfx_w-30,btn_h*2, gfx_w-1 ,btn_h*3-1,2, gfx_sine   ? $xFFFFFF : $x000000, gfx_sine   ? $xF4B219 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_sine   = !gfx_sine;
+spec.button(  "Har",    gfx_w-60,btn_h*2, gfx_w-31,btn_h*3-1,2, gfx_fft    ? $xFFFFFF : $x000000, gfx_fft    ? $x994C19 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_fft    = !gfx_fft;
+sine.button(  "Sin",    gfx_w-30,btn_h*2, gfx_w-1 ,btn_h*3-1,2, gfx_sine   ? $xFFFFFF : $x000000, gfx_sine   ? $xF4B219 : $xC0C0C0, $xF0F0F0, $x808080) ? gfx_sine   = !gfx_sine;
 
 // Knee size control
 kneectl.x1 = gfx_w - 55; kneectl.y1 = btn_h*4;
