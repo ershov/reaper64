@@ -201,3 +201,150 @@ num_sections > 0 ? (
 spl0 *= out_volume;
 spl1 *= out_volume;
 
+//===========================================================================
+@gfx 400 200
+
+// Setup graphics
+gfx_clear = 0x001122;
+gfx_r = 0.8; gfx_g = 0.9; gfx_b = 1.0; gfx_a = 1.0;
+
+// Draw grid
+// Stepped frequency grid lines
+gfx_freq_lines = 1300; // Memory location for frequency array
+gfx_freq_count = 0;
+
+// 10Hz steps
+gfx_freq = 20;
+loop(8,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 10;
+);
+
+// 100Hz steps
+gfx_freq = 100;
+loop(10,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 100;
+);
+
+// 1000Hz steps
+gfx_freq = 1000;
+loop(20,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 1000;
+);
+
+// Draw all frequency lines
+gfx_i = 0;
+loop(gfx_freq_count,
+  gfx_grid_freq = gfx_freq_lines[gfx_i];
+  gfx_x_pos = log(gfx_grid_freq / 20) * gfx_w / log(1000);  // Same scale as frequency response
+  gfx_r = gfx_g = gfx_b = 0.3; gfx_a = 0.5;
+  gfx_line(gfx_x_pos, 0, gfx_x_pos, gfx_h);
+  gfx_i += 1;
+);
+
+// Linear dB grid lines
+gfx_i = 0;
+loop(5,
+  gfx_y_pos = gfx_i * gfx_h / 4;
+  gfx_r = gfx_g = gfx_b = 0.3; gfx_a = 0.5;
+  gfx_line(0, gfx_y_pos, gfx_w, gfx_y_pos);
+  gfx_i += 1;
+);
+
+// Calculate and draw frequency response
+sl_order > 0 ? (
+  gfx_r = 1.0; gfx_g = 0.8; gfx_b = 0.2; gfx_a = 1.0;
+
+  gfx_pixel = 0;
+  loop(gfx_w,
+    // Convert pixel position to frequency (log scale from 20Hz to 20kHz)
+    gfx_freq = 20 * exp(gfx_pixel * log(1000) / gfx_w);  // 20Hz to 20kHz
+
+    // Calculate complex response for this frequency
+    gfx_omega = 2 * $pi * gfx_freq / srate;
+    gfx_z_real = cos(gfx_omega);
+    gfx_z_imag = sin(gfx_omega);
+
+    // Initialize response (start with unity)
+    gfx_h_real = 1.0;
+    gfx_h_imag = 0.0;
+
+    // Multiply response of each biquad section
+    gfx_section = 0;
+    loop(num_sections,
+      // Calculate H(z) = (a0 + a1*z^-1 + a2*z^-2) / (1 + b1*z^-1 + b2*z^-2)
+      // where z = e^(jω)
+
+      // Numerator: a0 + a1*z^-1 + a2*z^-2
+      gfx_num_real = a0_coeffs[gfx_section] + a1_coeffs[gfx_section] * gfx_z_real + a2_coeffs[gfx_section] * (gfx_z_real*gfx_z_real - gfx_z_imag*gfx_z_imag);
+      gfx_num_imag = a1_coeffs[gfx_section] * (-gfx_z_imag) + a2_coeffs[gfx_section] * (-2*gfx_z_real*gfx_z_imag);
+
+      // Denominator: 1 + b1*z^-1 + b2*z^-2
+      gfx_den_real = 1 + b1_coeffs[gfx_section] * gfx_z_real + b2_coeffs[gfx_section] * (gfx_z_real*gfx_z_real - gfx_z_imag*gfx_z_imag);
+      gfx_den_imag = b1_coeffs[gfx_section] * (-gfx_z_imag) + b2_coeffs[gfx_section] * (-2*gfx_z_real*gfx_z_imag);
+
+      // Complex division: (num_real + j*num_imag) / (den_real + j*den_imag)
+      gfx_den_mag_sq = gfx_den_real*gfx_den_real + gfx_den_imag*gfx_den_imag;
+      gfx_den_mag_sq < 0.0000001 ? gfx_den_mag_sq = 0.0000001;  // Prevent division by zero
+
+      gfx_section_real = (gfx_num_real*gfx_den_real + gfx_num_imag*gfx_den_imag) / gfx_den_mag_sq;
+      gfx_section_imag = (gfx_num_imag*gfx_den_real - gfx_num_real*gfx_den_imag) / gfx_den_mag_sq;
+
+      // Multiply with accumulated response: h *= section_response
+      gfx_new_h_real = gfx_h_real * gfx_section_real - gfx_h_imag * gfx_section_imag;
+      gfx_new_h_imag = gfx_h_real * gfx_section_imag + gfx_h_imag * gfx_section_real;
+      gfx_h_real = gfx_new_h_real;
+      gfx_h_imag = gfx_new_h_imag;
+
+      gfx_section += 1;
+    );
+
+    // Calculate magnitude in dB
+    gfx_mag_sq = gfx_h_real*gfx_h_real + gfx_h_imag*gfx_h_imag;
+    gfx_mag_sq < 0.0000001 ? gfx_mag_sq = 0.0000001;  // Prevent log(0)
+    gfx_mag_db = 10 * log(gfx_mag_sq) / log(10);
+
+    // Convert dB to pixel position (0dB at center, ±60dB range)
+    gfx_y_curve = gfx_h/2 - gfx_mag_db * gfx_h / 120;  // 120dB total range (-60 to +60)
+    gfx_y_curve = max(0, min(gfx_h, gfx_y_curve));
+
+    // Draw line
+    gfx_pixel == 0 ? gfx_x = gfx_pixel : gfx_lineto(gfx_pixel, gfx_y_curve);
+    gfx_y = gfx_y_curve;
+
+    gfx_pixel += 1;
+  );
+);
+
+// Draw frequency labels
+gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
+gfx_x = 5; gfx_y = 5;
+gfx_printf("20Hz");
+gfx_x = gfx_w - 40; gfx_y = 5;
+gfx_printf("20KHz");
+
+gfx_x = log(100 / 20) * gfx_w / log(1000) - 10; gfx_y = 5;
+gfx_printf("100Hz");
+
+gfx_x = log(1000 / 20) * gfx_w / log(1000) - 10; gfx_y = 5;
+gfx_printf("1KHz");
+
+// Draw cutoff frequency indicator
+gfx_cutoff_x = log(sl_freq / 20) * gfx_w / log(1000);
+gfx_r = 1.0; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 0.8;
+gfx_line(gfx_cutoff_x, 0, gfx_cutoff_x, gfx_h);
+
+// Draw dB scale
+gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
+gfx_x = 5; gfx_y = gfx_h/2 - 5;
+gfx_printf("0dB");
+//gfx_x = 5; gfx_y = 15;
+//gfx_printf("+60dB");
+gfx_x = 5; gfx_y = gfx_h - 15;
+gfx_printf("-60dB");
+
