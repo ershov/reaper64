@@ -3,14 +3,16 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.1
+  Version: 1.1.0
   About:
     Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH
-  Screenshot: https://i.imgur.com/3cRcrBI.png
-  Link: https://i.imgur.com/3cRcrBI.png
+  Screenshot: https://imgur.com/a/bc4AYwp
+  Link: https://imgur.com/a/bc4AYwp
   Changelog:
     v1.0:
     * Initial release
+    v1.1:
+    * Frequency response graph
 */
 
 // (C) 2025 Yury Ershov
@@ -31,7 +33,7 @@
 // <http://www.gnu.org/licenses/>.
 
 //===========================================================================
-desc: ERSH Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB
+desc: ERSH Pole Filter - Zero delay, N-Order
 //tags: filter
 //author: ERSH
 
@@ -146,4 +148,154 @@ spl1_last = spl1;
 
 spl0 *= out_volume;
 spl1 *= out_volume;
+
+//===========================================================================
+@gfx 400 200
+
+// Setup graphics
+gfx_clear = 0x001122;
+gfx_r = 0.8; gfx_g = 0.9; gfx_b = 1.0; gfx_a = 1.0;
+
+// Draw grid
+// Stepped frequency grid lines
+gfx_freq_lines = 1300; // Memory location for frequency array
+gfx_freq_count = 0;
+
+// 10Hz steps
+gfx_freq = 20;
+loop(8,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 10;
+);
+
+// 100Hz steps
+gfx_freq = 100;
+loop(9,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 100;
+);
+
+// 1000Hz steps
+gfx_freq = 1000;
+loop(20,
+  gfx_freq_lines[gfx_freq_count] = gfx_freq;
+  gfx_freq_count += 1;
+  gfx_freq += 1000;
+);
+
+// Draw all frequency lines
+gfx_i = 0;
+loop(gfx_freq_count,
+  gfx_grid_freq = gfx_freq_lines[gfx_i];
+  gfx_x_pos = log(gfx_grid_freq / 20) * gfx_w / log(1000);  // Same scale as frequency response
+  gfx_r = gfx_g = gfx_b = 0.3; gfx_a = 0.5;
+  gfx_line(gfx_x_pos, 0, gfx_x_pos, gfx_h);
+  gfx_i += 1;
+);
+
+// Linear dB grid lines
+gfx_i = 0;
+loop(5,
+  gfx_y_pos = gfx_i * gfx_h / 4;
+  gfx_r = gfx_g = gfx_b = 0.3; gfx_a = 0.5;
+  gfx_line(0, gfx_y_pos, gfx_w, gfx_y_pos);
+  gfx_i += 1;
+);
+
+// Calculate and draw frequency response
+gfx_r = 1.0; gfx_g = 0.8; gfx_b = 0.2; gfx_a = 1.0;
+sl_order > 0 ? (
+
+  gfx_pixel = 0;
+  loop(gfx_w,
+    // Convert pixel position to frequency (log scale from 20Hz to 20kHz)
+    gfx_freq = 20 * exp(gfx_pixel * log(1000) / gfx_w);
+
+    // Calculate total magnitude in dB by summing the dB response of each section
+    gfx_total_mag_db = 0;
+
+    // Calculate complex response for this frequency
+    gfx_omega = 2 * $pi * gfx_freq / srate;
+
+    // z^-1 = e^(-jω)
+    gfx_z_inv_real = cos(gfx_omega);
+    gfx_z_inv_imag = -sin(gfx_omega);
+
+    // For TPT, the processing is s[n] = s[n-1] + alpha * (x[n] - s[n-1]), which gives
+    // H_lp(z) = alpha / (1 - (1-alpha)*z^-1). This is the same form as Basic/Matched-Z.
+    // The 'alpha' is just calculated differently.
+    // The HP is 1 - LP.
+    // So the graph drawing logic is identical for all transform types.
+
+    // H_lp(z) = alpha / (1 - alpha1 * z^-1) where alpha1 = 1-alpha for Basic/Matched-Z
+    // For TPT, the structure is the same, but alpha1 is not pre-calculated.
+    // Let's use a local alpha1 for graphics to unify the code.
+    gfx_alpha1 = (sl_transform == 0 || sl_transform == 1) ? alpha1 : 1-alpha;
+
+    // Denominator: 1 - gfx_alpha1 * z^-1
+    gfx_den_real = 1 - gfx_alpha1 * gfx_z_inv_real;
+    gfx_den_imag = -gfx_alpha1 * gfx_z_inv_imag;
+    gfx_den_mag_sq = gfx_den_real*gfx_den_real + gfx_den_imag*gfx_den_imag;
+    gfx_den_mag_sq < 0.000000000001 ? gfx_den_mag_sq = 0.000000000001;
+
+    sl_type == 0 ? ( // LP
+      // Numerator: alpha
+      gfx_num_mag_sq = alpha*alpha;
+      gfx_mag_sq = gfx_num_mag_sq / gfx_den_mag_sq;
+    ) : ( // HP
+      // H_hp(z) = 1 - H_lp(z) = (1 - gfx_alpha1*z^-1 - alpha) / (1 - gfx_alpha1*z^-1)
+      // Numerator: 1 - alpha - gfx_alpha1*z^-1
+      gfx_num_real = 1 - alpha - gfx_alpha1 * gfx_z_inv_real;
+      gfx_num_imag = -gfx_alpha1 * gfx_z_inv_imag;
+      gfx_num_mag_sq = gfx_num_real*gfx_num_real + gfx_num_imag*gfx_num_imag;
+      gfx_mag_sq = gfx_num_mag_sq / gfx_den_mag_sq;
+    );
+
+    // For N-order, magnitude is mag^N, so dB is N * v2db(mag)
+    gfx_total_mag_db = sl_order * v2db(sqrt(gfx_mag_sq));
+
+    // Convert total dB to pixel position (0dB at center, ±60dB range)
+    gfx_y_curve = gfx_h/2 - gfx_total_mag_db * gfx_h / 120;
+    gfx_y_curve = max(0, min(gfx_h, gfx_y_curve));
+
+    // Draw line
+    gfx_pixel == 0 ? gfx_x = gfx_pixel : gfx_lineto(gfx_pixel, gfx_y_curve+0.5);
+    gfx_y = gfx_y_curve;
+
+    gfx_pixel += 1;
+  );
+) : (
+  gfx_line(0, gfx_h/2, gfx_w, gfx_h/2);
+);
+
+// Draw cutoff frequency indicator
+gfx_cutoff_x = log(sl_freq / 20) * gfx_w / log(1000);
+gfx_r = 1.0; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 0.8;
+gfx_line(gfx_cutoff_x, 0, gfx_cutoff_x, gfx_h);
+
+// Draw frequency labels
+gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
+gfx_x = 5; gfx_y = 5;
+gfx_printf("20Hz");
+gfx_x = gfx_w - 40; gfx_y = 5;
+gfx_printf("20KHz");
+gfx_x = log(100 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("100Hz");
+gfx_x = log(300 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("300Hz");
+gfx_x = log(1000 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("1KHz");
+gfx_x = log(3000 / 20) * gfx_w / log(1000) - 10;
+gfx_printf("3KHz");
+
+// Draw dB scale
+gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
+gfx_x = 5; gfx_y = gfx_h/2 - 5;
+gfx_printf("0dB");
+//gfx_x = 5; gfx_y = 15;
+//gfx_printf("+60dB");
+gfx_x = 5; gfx_y = gfx_h - 15;
+gfx_printf("-60dB");
 

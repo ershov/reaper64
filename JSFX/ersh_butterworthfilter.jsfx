@@ -1,16 +1,18 @@
 /**
-  JSFX Name: Zero delay N-Order Butterworth Filter - 6dB, 12dB, ... 72dB by ERSH
+  JSFX Name: Zero delay N-Order Butterworth Filter by ERSH
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.0.0
+  Version: 1.1.0
   About:
-    Zero delay N-Order Butterworth Filter - 6dB, 12dB, ... 72dB by ERSH
-  Screenshot: https://i.imgur.com/3cRcrBI.png
-  Link: https://i.imgur.com/3cRcrBI.png
+    Zero delay N-Order Butterworth Filter by ERSH
+  Screenshot: https://imgur.com/a/bUT1I9H
+  Link: https://imgur.com/a/bUT1I9H
   Changelog:
     v1.0:
     * Initial release
+    v1.1:
+    * Frequency response graph
 */
 
 // (C) 2025 Yury Ershov
@@ -31,11 +33,11 @@
 // <http://www.gnu.org/licenses/>.
 
 //===========================================================================
-desc: ERSH Butterworth Filter - Variable Order
+desc: ERSH Butterworth Filter - Zero delay, N-Order
 //tags: filter
 //author: ERSH
 
-slider5:sl_type=0<0,1,1{LowPass / HighCut,HighPass / LowCut}>Filter Type
+slider5:sl_type=0<0,1,1{LP,HP}>Filter Type
 slider10:sl_note=0<-54,67,0.01>Cutoff Note, relative to A4
 slider11:sl_freq=20000<20,20020,0.1>Cutoff frequency, Hz
 slider15:sl_order=1<0,12,1>Filter order (0 = bypass)
@@ -281,8 +283,8 @@ loop(5,
 );
 
 // Calculate and draw frequency response
+gfx_r = 1.0; gfx_g = 0.8; gfx_b = 0.2; gfx_a = 1.0;
 num_sections > 0 ? (
-  gfx_r = 1.0; gfx_g = 0.8; gfx_b = 0.2; gfx_a = 1.0;
 
   gfx_pixel = 0;
   loop(gfx_w,
@@ -334,7 +336,14 @@ num_sections > 0 ? (
 
     gfx_pixel += 1;
   );
+) : (
+  gfx_line(0, gfx_h/2, gfx_w, gfx_h/2);
 );
+
+// Draw cutoff frequency indicator
+gfx_cutoff_x = log(sl_freq / 20) * gfx_w / log(1000);
+gfx_r = 1.0; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 0.8;
+gfx_line(gfx_cutoff_x, 0, gfx_cutoff_x, gfx_h);
 
 // Draw frequency labels
 gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
@@ -350,11 +359,6 @@ gfx_x = log(1000 / 20) * gfx_w / log(1000) - 10;
 gfx_printf("1KHz");
 gfx_x = log(3000 / 20) * gfx_w / log(1000) - 10;
 gfx_printf("3KHz");
-
-// Draw cutoff frequency indicator
-gfx_cutoff_x = log(sl_freq / 20) * gfx_w / log(1000);
-gfx_r = 1.0; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 0.8;
-gfx_line(gfx_cutoff_x, 0, gfx_cutoff_x, gfx_h);
 
 // Draw dB scale
 gfx_r = gfx_g = gfx_b = 0.8; gfx_a = 1.0;
