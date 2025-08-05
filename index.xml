@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="ERSH plugins and effects" commit="20dbaed9797bc76f554c792dbfe765c09bedc635">
+<index version="1" name="ERSH plugins and effects" commit="7e75698b1c079631e6987225abe05ac6ff2a4c6c">
   <category name="JSFX">
     <reapack name="ersh_agc.jsfx" type="effect" desc="AGC - Automatic Gain Control">
       <metadata>
@@ -276,6 +276,36 @@ v1.3.3:
         <source file="ersh_agc.jsfx.rpl">https://github.com/ershov/reaper64/raw/9b3479a0e28684bf2de9660670350e11f55c5370/JSFX/ersh_agc.jsfx.rpl</source>
       </version>
     </reapack>
+    <reapack name="ersh_butterworthfilter.jsfx" type="effect" desc="Zero delay N-Order Butterworth Filter by ERSH">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Zero delay N-Order Butterworth Filter by ERSH\par}
+}
+]]></description>
+        <link rel="website">https://imgur.com/a/bUT1I9H</link>
+        <link rel="screenshot">https://imgur.com/a/bUT1I9H</link>
+      </metadata>
+      <version name="1.0.1" author="ersh" time="2025-08-03T10:59:58Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/8b52fe349f8ebf37955d7c36cba6b0494671e018/JSFX/ersh_butterworthfilter.jsfx</source>
+      </version>
+      <version name="1.0.0" author="ersh" time="2025-08-03T20:40:02Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/209305e0a9e41fb2ab9754feaa89b5df1b21f9bb/JSFX/ersh_butterworthfilter.jsfx</source>
+      </version>
+      <version name="1.1.0" author="ersh" time="2025-08-05T20:25:50Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Frequency response graph]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/7e75698b1c079631e6987225abe05ac6ff2a4c6c/JSFX/ersh_butterworthfilter.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="ersh_cabinet_emu.jsfx" type="effect" desc="Waveshaping Overloaded Cabinet Emulator">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -301,16 +331,28 @@ v1.3.3:
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Extended version of standard TransientController.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Zero delay N-Order Pole Filter - 6dB, 12dB, ... 72dB by ERSH\par}
 }
 ]]></description>
-        <link rel="website">https://i.imgur.com/3cRcrBI.png</link>
-        <link rel="screenshot">https://i.imgur.com/3cRcrBI.png</link>
+        <link rel="website">https://imgur.com/a/bc4AYwp</link>
+        <link rel="screenshot">https://imgur.com/a/bc4AYwp</link>
       </metadata>
       <version name="1.0.0" author="ersh" time="2025-06-18T06:57:20Z">
         <changelog><![CDATA[v1.0:
 * Initial release]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/99112c8869418e8ad33141526351113202f54bf1/JSFX/ersh_polefilter.jsfx</source>
+      </version>
+      <version name="1.0.1" author="ersh" time="2025-08-03T01:08:36Z">
+        <changelog><![CDATA[v1.0:
+* Initial release]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/a7cf2b1b5df1a12fb80c3204cca7886da86d3870/JSFX/ersh_polefilter.jsfx</source>
+      </version>
+      <version name="1.1.0" author="ersh" time="2025-08-05T20:25:50Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Frequency response graph]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/7e75698b1c079631e6987225abe05ac6ff2a4c6c/JSFX/ersh_polefilter.jsfx</source>
       </version>
     </reapack>
     <reapack name="ersh_simplelp6db.jsfx" type="effect" desc="Simple 1-Pole Filter (phase corrected)">
@@ -621,6 +663,22 @@ v1.5:
 * Add peaks and volume range display]]></changelog>
         <source>https://github.com/ershov/reaper64/raw/20dbaed9797bc76f554c792dbfe765c09bedc635/JSFX/ersh_waveShapingHyper.jsfx</source>
         <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/20dbaed9797bc76f554c792dbfe765c09bedc635/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
+      </version>
+      <version name="1.5.1" author="ersh" time="2025-08-04T21:09:06Z">
+        <changelog><![CDATA[v1.0:
+* Initial release
+v1.1:
+* Fix knee size range
+v1.2:
+* Fix interaction with sliders in graphics section
+v1.3:
+* Add knee size controll
+v1.4:
+* Add spectre and wave shape display
+v1.5:
+* Add peaks and volume range display]]></changelog>
+        <source>https://github.com/ershov/reaper64/raw/f3c9c642fef8eb142a658be419a8c7325ef7d75e/JSFX/ersh_waveShapingHyper.jsfx</source>
+        <source file="ersh_waveShapingHyper.jsfx.rpl">https://github.com/ershov/reaper64/raw/f3c9c642fef8eb142a658be419a8c7325ef7d75e/JSFX/ersh_waveShapingHyper.jsfx.rpl</source>
       </version>
     </reapack>
   </category>
