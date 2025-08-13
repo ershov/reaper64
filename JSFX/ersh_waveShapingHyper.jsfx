@@ -3,7 +3,7 @@
   Author: ersh
   Licence: GPL
   REAPER: 6.0
-  Version: 1.5.1
+  Version: 1.5.2
   Tags: processing distortion saturation maximizer waveshaper
   Provides:
     ersh_waveShapingHyper.jsfx.rpl
@@ -24,6 +24,8 @@
     * Add spectre and wave shape display
     v1.5:
     * Add peaks and volume range display
+    v1.5.2:
+    * Dynamic harmonics and sine wave display
 */
 
 // (C) 2025, Yury Ershov.
@@ -83,6 +85,7 @@ preset:"Distort3"  - - - - 0 - - - - 0.0 0.4 0.1   - - - - - - - 0 12 0 0 10000 
 @init
 
 max_spl_t = 0;
+ffx_sin_scale = 1;
 
 LOG2 = log(2);
 LOG10 = log(10);
@@ -201,63 +204,7 @@ function onSliders() local(eps eps1 _in_corr) (
   alpha = dt / (RC + dt);
   alpha1 = 1 - alpha;
 
-  !(sl_order > 0 && RC > 0) ? (
-    // gfx_fft
-    i = 0; loop(fft_size, (fft_buf[i] = distort(sin((i/128)*$pi*2)*in_volume)*out_volume; i+=1;));
-    // gfx_sine
-    i = 0; loop(sine_steps, (sine_buf[i] = distort(sin((i/sine_steps-0.5)*$pi*2)*in_volume)*out_volume; i+=1;));
-  ) : (
-    i = 0; loop(sl_order, ( fft_spl0f[i] = sine_spl0f[i] = 0; i += 1; ));
-
-    // gfx_fft
-    fft_step = $pi*2/128;
-    // Find zero crossing
-    fft_x = 0;
-    // Step from zero
-    loop(32, gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume));
-    // Nagative crossing
-    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) > 0);
-    // Positive crossing
-    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) < 0);
-    i = 0; loop(fft_size, (
-      fft_buf[i] = gfx_spl;
-      i+=1;
-      gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume);
-    ));
-
-    // gfx_sine
-    fft_step = $pi*2/sine_steps;
-    // Find zero crossing
-    fft_x = 0;
-    // Step from zero
-    loop(32, gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume));
-    // Nagative crossing
-    while( (gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume)) > 0);
-    i = 0; loop(sine_steps, (
-      sine_buf[i] = gfx_spl;
-      i+=1;
-      gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*in_volume)*out_volume);
-    ));
-  );
-
-  fft_real(fft_buf, fft_size); fft_permute(fft_buf, fft_size/2);
-
-  fft_max = -1000;
-  i = 0; loop(fft_size/2, (
-    gfx_spl = abs(fft_buf[i])/fft_size/2;
-    gfx_spl = gfx_spl > 0.000001 ? v2db(gfx_spl) : -1000;
-    gfx_spl = gfx_spl/fft_floor + 1;
-    fft_gfx[i] = gfx_spl;
-    fft_max = max(fft_max, gfx_spl);
-    i+=1;
-  ));
-  fft_max = 1 - fft_max;
-  i=0; loop(fft_size/2, ( fft_gfx[i] += fft_max; i+=1;));
-  // Clean up spectre - leave only local maximums
-  i=0; loop(fft_size/2-1, ( fft_gfx[i+1] > fft_gfx[i] ? fft_gfx[i]=0; i+=1;));
-  i=fft_size/2-1; loop(fft_size/2-2, ( fft_gfx[i-1] > fft_gfx[i] ? fft_gfx[i]=0; i-=1;));
-
-  //mem_get_values(fft_gfx, debug0, debug1, debug2, debug3, debug4, debug5, debug6, debug7, debug8, debug9, debug10, debug11, debug12, debug13, debug14, debug15, debug16, debug17, debug18, debug19, debug20, debug21, debug22, debug23, debug24, debug25, debug26, debug27, debug28, debug29, debug30, debug31, debug32, debug33, debug34, debug35, debug36, debug37, debug38, debug39, debug40);
+  recalc_fft = 1;
 );
 
 // LP filter
@@ -461,6 +408,69 @@ goto(x2sc(0)+3, y2sc(1)+1); gfx_drawstr("OUT");
 setcolor3(0.3, 0.3, 0.3);
 sc_rectangle(-1, -1, 1, 1);
 
+spl_in_max_peak >= 0.05 ? ffx_sin_scale = spl_in_max_peak;
+(gfx_fft || gfx_sine) && (recalc_fft || ffx_sin_scale != ffx_sin_scale_) ? (
+  recalc_fft = 0;
+  ffx_sin_scale_ = ffx_sin_scale;
+  !(sl_order > 0 && RC > 0) ? (
+    // gfx_fft
+    iii = 0; loop(fft_size, (fft_buf[iii] = distort(sin((iii/128)*$pi*2)*ffx_sin_scale)*out_volume; iii+=1;));
+    // gfx_sine
+    iii = 0; loop(sine_steps, (sine_buf[iii] = distort(sin((iii/sine_steps-0.5)*$pi*2)*ffx_sin_scale)*out_volume; iii+=1;));
+  ) : (
+    iii = 0; loop(sl_order, ( fft_spl0f[iii] = sine_spl0f[iii] = 0; iii += 1; ));
+
+    // gfx_fft
+    fft_step = $pi*2/128;
+    // Find zero crossing
+    fft_x = 0;
+    // Step from zero
+    loop(32, gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume));
+    // Nagative crossing
+    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume)) > 0);
+    // Positive crossing
+    while( (gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume)) < 0);
+    iii = 0; loop(fft_size, (
+      fft_buf[iii] = gfx_spl;
+      iii+=1;
+      gfx_spl = pole_filter(fft_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume);
+    ));
+
+    // gfx_sine
+    fft_step = $pi*2/sine_steps;
+    // Find zero crossing
+    fft_x = 0;
+    // Step from zero
+    loop(32, gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume));
+    // Nagative crossing
+    while( (gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume)) > 0);
+    iii = 0; loop(sine_steps, (
+      sine_buf[iii] = gfx_spl;
+      iii+=1;
+      gfx_spl = pole_filter(sine_spl0f, distort(sin(fft_x += fft_step)*ffx_sin_scale)*out_volume);
+    ));
+  );
+
+  fft_real(fft_buf, fft_size); fft_permute(fft_buf, fft_size/2);
+
+  fft_max = -1000;
+  iii = 0; loop(fft_size/2, (
+    gfx_spl = abs(fft_buf[iii])/fft_size/2;
+    gfx_spl = gfx_spl > 0.00000001 ? v2db(gfx_spl) : -1000;
+    gfx_spl = gfx_spl/fft_floor + 1;
+    fft_gfx[iii] = gfx_spl;
+    fft_max = max(fft_max, gfx_spl);
+    iii+=1;
+  ));
+  fft_max = 1 - fft_max;
+  iii=0; loop(fft_size/2, ( fft_gfx[iii] += fft_max; iii+=1;));
+  // Clean up spectre - leave only local maximums
+  iii=0; loop(fft_size/2-1, ( fft_gfx[iii+1] > fft_gfx[iii] ? fft_gfx[iii]=0; iii+=1;));
+  iii=fft_size/2-1; loop(fft_size/2-2, ( fft_gfx[iii-1] > fft_gfx[iii] ? fft_gfx[iii]=0; iii-=1;));
+
+  //mem_get_values(fft_gfx, debug0, debug1, debug2, debug3, debug4, debug5, debug6, debug7, debug8, debug9, debug10, debug11, debug12, debug13, debug14, debug15, debug16, debug17, debug18, debug19, debug20, debug21, debug22, debug23, debug24, debug25, debug26, debug27, debug28, debug29, debug30, debug31, debug32, debug33, debug34, debug35, debug36, debug37, debug38, debug39, debug40);
+);
+
 // Spectre
 gfx_fft ? (
   gfx_a = 0.4;  // same color as axis but dimmer
@@ -546,7 +556,7 @@ gfx_recta(x2sc(gfx_x2 ? 0 : spl_in_min/in_volume), y2sc(0)-1, x2sc(spl_in_max/in
 gfx_recta(x2sc(0)-1, y2sc(gfx_x2 ? 0 : spl_out_min*out_volume), x2sc(0)+2, y2sc(spl_out_max*out_volume));
 
 // ...peaks
-!gfx_fft ? (
+1 /* !gfx_fft */ ? (
   // avg
   gfx_a=0.7;
   sc_goto(spl_in_max_avg/in_volume, 0); gfx_lineto(gfx_x, y2sc(distort(spl_in_max_avg)*out_volume)); gfx_lineto(x2sc(0), gfx_y);
