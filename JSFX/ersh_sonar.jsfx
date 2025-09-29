@@ -1,0 +1,1144 @@
+slider10:sl_length=120<0,2000,0.001>IR Length, ms
+slider11:sl_offset=0<0,2000,0.001>IR Offset, ms
+slider12:sl_dbfloor=120<6,186,0.01>dB display floor
+slider23:sl_channel_out=0<0,1,1{Left,Right}>Output Channel
+slider24:sl_channel_in=0<0,1,1{Left,Right}>Input Channel
+slider33:sl_shape=0<0,21,1{|~,|~|,|\,/\,1/2 sin,full sin,swipe \,swipe /,swipe /\,white noise,white noise smooth,: continuous,: continuous+pause,us-sq,us smooth,us peak,N waves,N waves smooth}>Impulse shape
+slider34:sl_imp_len=3<0,10,0.0001>Impulse length, ms / #
+slider35:sl_freq=12000<20,40020,0.01>Ultrasound frequency, Hz
+
+slider50:sl_logscale=0<0,1,1{WAV,dB}>-Waveform / dB display
+slider51:sl_repeat=0<0,1,1{No,Yes}>-Repeat impulse
+
+@init
+
+// Memory layout:
+//      From                      To                               What
+//   0                         MAX_1_REC_LENGTH               Recorded samples
+//   MAX_1_REC_LENGTH        2*MAX_1_REC_LENGTH-1             Detected peaks
+// 2*MAX_1_REC_LENGTH        3*MAX_1_REC_LENGTH-1             Outstanding peaks
+// MAX_TOTAL_REC_LENGTH                                       Max abs value in samples
+// MAX_TOTAL_REC_LENGTH+1                                     Max peak-to-peak value in peaks
+// MAX_TOTAL_REC_LENGTH+2                                     Max noise level
+// MAX_TOTAL_REC_LENGTH+3                                     Impulse start index
+// MAX_TOTAL_REC_LENGTH+N_REC_VARIABLES = records_offset      Next record start
+
+MAXMEM = 8388608; // Magic number from https://www.reaper.fm/sdk/js/js.php
+//gfx_ext_retina = 1;
+N_REC_VARIABLES = 10;
+N_RECS = 3; // samples, peaks, outstanding peaks
+MAX_REC_LENGTH_SEC = 2; // seconds
+MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+SCAN_OFFSET = records_offset*5;
+SCAN_SIZE = 512;
+data = 10000;
+ir_size = 0;
+_INF_V = 0.0000001;
+_INF_DB = -140;
+ir_max = _INF_V;
+scan_pos = -1;
+smplEnd = 1;
+sl_logscale = 1;
+
+memset(data, _INF_V, 4*records_offset);
+
+function int(x) (x|0);
+
+function mix(a, b, x) ( a*(1-x) + b*x );
+function clamp(x, v1, v2) ( min(max(x, v1), v2) );
+function smoothstep(v1, v2, x) local(t) (
+  v1 > v2 ? ( v1 = -v1; v2 = -v2; x = -x; );
+  t = clamp((x - v1) / (v2 - v1), 0.0, 1.0);
+  t * t * (3.0 - 2.0 * t);
+);
+// https://graphtoy.com/?f1(x,t)=1-(x*2-1)**2&v1=true&f2(x,t)=(1-(x*2-1)**2)**3&v2=true&f3(x,t)=(1-(x*2-1)**8)**2&v3=true&f4(x,t)=&v4=false&f5(x,t)=&v5=false&f6(x,t)=&v6=false&grid=1&coords=0.5,0.5,0.666098807495741
+function envelope(x)        ( /* 1-(x*2-1)**2 */      x = (x*2-1); 1 - x*x );
+function envelope_peak(x)   ( /* (1-(x*2-1)**2)**3 */ x = (x*2-1); x = x*x; x = 1 - x; x*x*x );
+function envelope_smooth(x) ( /* (1-(x*2-1)**8)**2 */ x = (x*2-1); x = x*x; x = x*x; x = x*x; x = 1 - x; x*x );
+
+LOG2 = log(2);
+LOG2 = log(2);
+LOG10 = log(10);
+__v2db = 20/LOG10;
+function v2db(v) ( log(v)*__v2db );
+function db2v(db) ( exp(db/__v2db) );
+
+function note2freq(note) ( exp(note/12*LOG2)*440 );
+function freq2note(freq) ( 12*log(freq/440)/LOG2 );
+SWIPE_MIN_HZ = 20;
+SWIPE_MAX_HZ = 20000;
+note_min = freq2note(SWIPE_MIN_HZ);
+note_max = freq2note(SWIPE_MAX_HZ);
+swipe_range = note_max - note_min;
+
+in_indicator_min = _INF_V; // db2v(-120);
+
+function bw_init(mem, type, freq) local(section wc w0 cosw0 sinw0 alpha b0 b1 b2 a0 a1 a2 i total_order k q_factor) (
+  this.sl_freq = freq; // srate / 3;// min(srate/3, 10000);
+  this.sl_order = 1;
+  this.sl_type = type; // 0=LP, 1=HP
+  // Biquad state variables for up to 12 sections (24th order)
+  // Each section needs: x1, x2, y1, y2
+  this.max_sections = 12; // Maximum number of sections
+  this.x1 = mem; this.x2 = mem + this.max_sections; this.y1 = mem + this.max_sections*2; this.y2 = mem + this.max_sections*3;
+  // Coefficients for each section
+  this.a0_coeffs = mem + this.max_sections*4; this.a1_coeffs = mem + this.max_sections*5; this.a2_coeffs = mem + this.max_sections*6;
+  this.b1_coeffs = mem + this.max_sections*7; this.b2_coeffs = mem + this.max_sections*8;
+  this.max_mem = this.max_sections * 9;
+
+  this.num_sections = min(this.sl_order, this.max_sections);
+
+  (
+    wc = 2 * $pi * min(this.sl_freq, srate*0.99) / srate;  // normalized frequency, limited to prevent aliasing
+
+    // Calculate coefficients for each biquad section
+    section = 0; loop(this.max_sections,  // fill in all sections, even if not used
+      // For Butterworth filters: Q = 1/(2*cos((2k+1)*π/(4N))) where N is total order
+      total_order = 2 * this.num_sections;
+      k = section; // section index
+      q_factor = 1 / (2 * cos((2*k + 1) * $pi / (2 * total_order)));
+
+      // Safety clamp
+      q_factor = max(min(q_factor, 100), 0.1);
+
+      // Use Robert Bristow-Johnson's cookbook formulas
+      w0 = wc;  // Use the same cutoff for all sections
+      cosw0 = cos(w0);
+      sinw0 = sin(w0);
+      alpha = sinw0 / (2 * q_factor);
+
+      this.sl_type == 0 ? (
+        // Low-pass coefficients
+        b0 = (1 - cosw0) / 2;
+        b1 = 1 - cosw0;
+        b2 = (1 - cosw0) / 2;
+        a0 = 1 + alpha;
+        a1 = -2 * cosw0;
+        a2 = 1 - alpha;
+      ) : (
+        // High-pass coefficients
+        b0 = (1 + cosw0) / 2;
+        b1 = -(1 + cosw0);
+        b2 = (1 + cosw0) / 2;
+        a0 = 1 + alpha;
+        a1 = -2 * cosw0;
+        a2 = 1 - alpha;
+      );
+
+      // Normalize and store coefficients
+      this.a0_coeffs[section] = b0 / a0;
+      this.a1_coeffs[section] = b1 / a0;
+      this.a2_coeffs[section] = b2 / a0;
+      this.b1_coeffs[section] = a1 / a0;
+      this.b2_coeffs[section] = a2 / a0;
+
+      section += 1;
+    );
+
+    // Initialize sample buffers to prevent artifacts on parameter change.
+    // Preserve meaningful values for lower orders.
+    (
+      i = 0; loop(this.max_sections,
+        this.x1[i] = this.x2[i] = this.y1[i] = this.y2[i] = 0;
+        i += 1;
+      );
+    );
+  );
+);
+
+function bw_process_sample(sample) local(smpl_out section) (
+  // Process through cascaded Butterworth biquad sections
+  this.num_sections > 0 ? (
+    // Process through each biquad section
+    section = 0; loop(this.num_sections,
+      smpl_out = this.a0_coeffs[section] * sample + this.a1_coeffs[section] * this.x1[section] + this.a2_coeffs[section] * this.x2[section]
+              - this.b1_coeffs[section] * this.y1[section] - this.b2_coeffs[section] * this.y2[section];
+
+      // Safety check to prevent runaway
+      abs(smpl_out) > 10 ? smpl_out = sign(smpl_out) * 10;
+
+      this.x2[section] = this.x1[section];
+      this.x1[section] = sample;
+      this.y2[section] = this.y1[section];
+      this.y1[section] = smpl_out;
+      sample = smpl_out;  // Output becomes input for next section
+
+      section += 1;
+    );
+  );
+  sample
+);
+
+function bw2_init(mem) local(width) (
+  width = 1;//1.25; // 1.2
+  this.max_mem = this.bw1.max_mem + this.bw2.max_mem;
+  // sl_freq >= 5000 ? (
+  //   this.bw1.bw_init(mem, 0, sl_freq*width); // Low-pass
+  //   this.bw2.bw_init(mem + this.bw1.max_mem, 1, sl_freq/width); // High-pass
+  // ) : sl_freq >= 100 ? (
+  //   this.bw1.bw_init(mem, 0, sl_freq/width);
+  //   this.bw2.bw_init(mem + this.bw1.max_mem, 1, sl_freq*width);
+  // ) : (
+  //   this.bw1.bw_init(mem, 0, sl_freq*width); // Low-pass
+  //   this.bw2.bw_init(mem + this.bw1.max_mem, 1, 10); // Low-pass
+  // );
+  this.bw1.bw_init(mem, 0, sl_freq*width); // Low-pass
+  this.bw2.bw_init(mem + this.bw1.max_mem, 1, sl_freq/width); // High-pass
+);
+
+function bw2_process_sample(sample) (
+  // Process through cascaded Butterworth biquad sections
+  this.bw1.num_sections > 0 ? (
+    // Process through each biquad section
+    section = 0; loop(this.bw1.num_sections,
+      smpl_out = this.bw1.a0_coeffs[section] * sample + this.bw1.a1_coeffs[section] * this.bw1.x1[section] + this.bw1.a2_coeffs[section] * this.bw1.x2[section]
+              - this.bw1.b1_coeffs[section] * this.bw1.y1[section] - this.bw1.b2_coeffs[section] * this.bw1.y2[section];
+
+      // Safety check to prevent runaway
+      abs(smpl_out) > 10 ? smpl_out = sign(smpl_out) * 10;
+
+      this.bw1.x2[section] = this.bw1.x1[section];
+      this.bw1.x1[section] = sample;
+      this.bw1.y2[section] = this.bw1.y1[section];
+      this.bw1.y1[section] = smpl_out;
+      sample = smpl_out;  // Output becomes input for next section
+
+      smpl_out = this.bw2.a0_coeffs[section] * sample + this.bw2.a1_coeffs[section] * this.bw2.x1[section] + this.bw2.a2_coeffs[section] * this.bw2.x2[section]
+              - this.bw2.b1_coeffs[section] * this.bw2.y1[section] - this.bw2.b2_coeffs[section] * this.bw2.y2[section];
+
+      // Safety check to prevent runaway
+      abs(smpl_out) > 10 ? smpl_out = sign(smpl_out) * 10;
+
+      this.bw2.x2[section] = this.bw2.x1[section];
+      this.bw2.x1[section] = sample;
+      this.bw2.y2[section] = this.bw2.y1[section];
+      this.bw2.y1[section] = smpl_out;
+      sample = smpl_out;  // Output becomes input for next section
+
+      section += 1;
+    );
+  );
+  sample
+);
+
+bw.bw2_init(0);
+
+function onSlider() (
+  sl_freq > srate/4 ? (sl_freq = srate/4);
+  imp_len_sec = sl_imp_len/1000;
+  ir_length_sec = sl_length / 1000.0;
+  ir_size_max = srate * ir_length_sec;
+  MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+  MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+  records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+);
+
+@slider
+
+onSlider();
+
+@sample
+
+sl_repeat && smplEnd
+//  && (smpl_idx - (data_rec[MAX_TOTAL_REC_LENGTH+3] ? smplStart+data_rec[MAX_TOTAL_REC_LENGTH+3] : smplEnd)) >= 0.5*srate  // restart after 0.5 seconds delay
+? (
+  smplEnd = 0;
+  running = 0;
+  sl_run = sl_repeat;
+
+  sl_scan ? (
+    scan_pos >= 0 ? (
+      data[SCAN_OFFSET + int(scan_pos*SCAN_SIZE)] = ir_max;
+      scan_max = max(scan_max, ir_max);
+    ) : (
+      scan_max = ir_max = _INF_V;
+    );
+    sl_scan == 1 ? (
+      // Scatter scan
+      scan_pos < 0 ? ( scan_pos = 0; scan_step = 1; scan_stage_offset = 0.5; ir_max = _INF_V; )
+      : scan_pos == 0 ? scan_pos = 1
+      : scan_pos == 1 ? scan_pos = scan_stage_offset
+      : (
+        scan_pos += scan_step;
+        scan_pos >= 1 ? (
+          scan_step /= 2;
+          scan_stage_offset /= 2;
+          scan_pos = scan_stage_offset;
+          scan_step <= 1/SCAN_SIZE ? scan_pos = 1.001; // Done
+        );
+      );
+    ) : (
+      // Sequential scan
+      scan_pos < 0 ? ( scan_pos = 0; scan_step = 1/SCAN_SIZE; scan_stage_offset = 0; ir_max = _INF_V; )
+      : (
+        scan_pos += scan_step;
+        scan_pos > 1 ? scan_pos = 1.001; // Done
+      );
+    );
+    scan_pos > 1 ? ( // Stop
+      memset(data + records_offset * (sl_repeat-1), _INF_V, records_offset);
+      sl_run = sl_scan = sl_repeat = 0; // Done
+      smplEnd = 1;
+      scan_pos = 1.001;
+    );
+    sl_freq = note2freq(note_min + swipe_range*scan_pos);
+  );
+);
+
+sl_run ? (
+  running == 0 ? (
+    // Not runnung
+    sl_length/1000.0 > 2.0 / srate ? (
+      running = 1;
+      smplStart = smpl_idx; smplEnd = 0;
+      pos = 0;
+      ir_length_sec = sl_length / 1000.0;
+      ir_size_max = srate * ir_length_sec;
+      MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+      MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+      records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+      data_rec = data + (sl_run - 1) * records_offset;
+      data_rec2 = data + (sl_run - 1) * records_offset + MAX_1_REC_LENGTH;
+      data_rec3 = data + (sl_run - 1) * records_offset + MAX_1_REC_LENGTH*2;
+      data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+      data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+      data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+      ir_max = _INF_V;
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+      bw.bw2_init(0);
+    ) : (
+      sl_run = 0;
+    );
+  ) : (
+    // Running
+    pos >= ir_size_max && !smplEnd ? (
+      data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+      //sl_run = 0;
+      //running = 0;
+      smplEnd = smpl_idx;
+    );
+    pos >= MAX_1_REC_LENGTH || running == 2 ? (
+      data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+      sl_run = 0;
+      running = 0;
+      !smplEnd ? (smplEnd = smpl_idx);
+    );
+  );
+);
+
+in = spl(sl_channel_in);
+i=0; loop(num_ch, spl(i)=0; i+=1;);
+in_max = max(in_max, abs(in));
+
+sl_shape == 11 || sl_shape == 12 ? (spl(sl_channel_out) = sin(2*$pi * smpl_idx/srate*sl_freq)); // Continuous sound
+sl_run ? (
+  /* sl_run != 3 && */ (sl_shape >= 11) ? (
+    // Filter input for ultrasound impulses
+    // data_rec[ir_size_max + records_offset] = ir_max = max(ir_max, abs(data_rec[pos + records_offset] = in));
+    in = bw.bw2_process_sample(in);
+  );
+  ir_max = max(ir_max, abs(in));
+  data_rec[pos] = in;
+  pos < samplesblock ?
+    data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(in)); // max noise level
+
+  // Detect peaks
+  in > 0 ? (
+    data_rec[pos-1] < 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = -data_rec2_last_npeak);
+    data_rec2_last_npeak = 0;
+    in > data_rec2_last_ppeak ? (data_rec2_last_ppeak = in);
+    data_rec2_last_ppeak > data_rec2_last_peak || in < data_rec[pos-1] ? (data_rec2_last_peak = data_rec2_last_ppeak);
+  ) : in < 0 ? (
+    data_rec[pos-1] > 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_ppeak);
+    data_rec2_last_ppeak = 0;
+    in < data_rec2_last_npeak ? (data_rec2_last_npeak = in);
+    data_rec2_last_npeak < -data_rec2_last_peak || in > data_rec[pos-1] ? (data_rec2_last_peak = -data_rec2_last_npeak);
+  );
+  data_rec2[pos] = cur_peak = max(max(data_rec2_last_peak, data_rec2_last_peak2), data_rec2_last_peak3);
+
+  // Detect impulse start
+  pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+    // 3x noise level
+    i = pos; while (i > samplesblock && data_rec2[i-1] <= data_rec2[i] && data_rec2[i] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( i -= 1 );
+    data_rec[MAX_TOTAL_REC_LENGTH+3] = i;
+  );
+
+  // Local maximums
+  data_rec3[pos] = 0;
+  cur_peak > data_rec2[pos-1] ? (
+    data_rec2_last_inc_pos == 0 ? (
+      data_rec2_peak_low_val = data_rec2_peak_low_val ? min(data_rec2_peak_low_val, abs(data_rec2[pos])) : abs(data_rec2[pos]);
+      data_rec2_last_max_pos && (pos - data_rec2_last_max_pos) <= srate/sl_freq && (data_rec2_peak_high_val - data_rec2_peak_low_val) > 0 ? (
+        data_rec[MAX_TOTAL_REC_LENGTH+1] = data_rec2_peak_noise_val = max(data_rec2_peak_noise_val, data_rec2_peak_high_val - data_rec2_peak_low_val);
+      );
+    );
+    data_rec2_last_inc_pos = pos;
+  ) : cur_peak < data_rec2[pos-1] && data_rec2_last_inc_pos > 0 ? (
+    cur_peak > data_rec2_peak_noise_val ? (
+      //i = pos - 1; while (i >= data_rec2_last_inc_pos) (data_rec3[i] = data_rec2[i]; i -= 1; );
+      i = int((pos + data_rec2_last_inc_pos) / 2);
+      data_rec3[i] = data_rec2[i];
+      data_rec2_peak_high_val = abs(data_rec3[i]);
+      // data_rec2_last_max_pos && (i - data_rec2_last_max_pos) <= max(max((pos - data_rec2_last_inc_pos)*4, srate*sl_imp_len/4/1000), 4*srate/sl_freq) ? (
+      data_rec2_last_max_pos && (
+          (i - data_rec2_last_max_pos) <= max((pos - data_rec2_last_inc_pos)*4, 4*srate/sl_freq) ||
+          (cur_peak - data_rec2_peak_low_val) < 2*data_rec2_peak_noise_val
+      ) ? (
+        data_rec3[data_rec2_last_max_pos] < data_rec3[i] ? (data_rec3[data_rec2_last_max_pos] = 0) :
+        data_rec3[data_rec2_last_max_pos] > data_rec3[i] ? (data_rec3[i] = 0);
+      );
+      data_rec2_peak_low_val = 0;
+      data_rec2_last_max_pos = i;
+      // (data_rec2_peak_high_val && cur_peak &&
+      //   v2db(data_rec2_peak_high_val/cur_peak) > 6 &&
+      //   data_rec2_peak_high_val - cur_peak > data_rec2_peak_noise_val*2) ? (data_rec2_last_inc_pos = 0);
+      data_rec2_last_inc_pos = 0;
+    );
+  );
+
+  sl_run != 3 && sl_shape != 11 ? (
+    dt = pos / srate;
+    sl_shape == 0 ? (spl(sl_channel_out) = 1) :
+    sl_shape < 16 ? (
+      dt < imp_len_sec ? (
+        sl_shape == 1 ? (spl(sl_channel_out) = 1)
+        : sl_shape == 2 ? (spl(sl_channel_out) = 1 - dt/(imp_len_sec))
+        : sl_shape == 3 ? (spl(sl_channel_out) = dt < imp_len_sec/2 ? 2*dt/(imp_len_sec) : 2 - 2*dt/imp_len_sec)
+        : sl_shape == 4 ? (spl(sl_channel_out) = sin($pi * dt/imp_len_sec))
+        : sl_shape == 5 ? (spl(sl_channel_out) = sin(2*$pi * dt/imp_len_sec))
+        // Swipe from 20kHz to 20Hz in the impulse length (log sweep): correct phase = integral of freq(t)
+        : sl_shape == 6 ? (
+          swipe_alpha = (swipe_range*LOG2/12)/imp_len_sec;
+          fmin = note2freq(note_min);          // start frequency (bottom)
+          // phase(t) = 2π * fmin/alpha * (exp(alpha*t) - 1)
+          spl(sl_channel_out) = sin(2*$pi * (fmin/swipe_alpha) * (exp(swipe_alpha*(imp_len_sec - dt)) - 1));
+        )
+        // Swipe up (20Hz -> 20kHz log sweep)
+        : sl_shape == 7 ? (
+          swipe_alpha = (swipe_range*LOG2/12)/imp_len_sec;
+          fmin = note2freq(note_min);          // start frequency (bottom)
+          // phase(t) = 2π * fmin/alpha * (exp(alpha*t) - 1)
+          spl(sl_channel_out) = sin(2*$pi * (fmin/swipe_alpha) * (exp(swipe_alpha*dt) - 1));
+        )
+        // 2-way swipe (up then down), log domain
+        : sl_shape == 8 ? (
+          swipe_alpha = (swipe_range*LOG2/12)/imp_len_sec*2;
+          fmin = note2freq(note_min);          // start frequency (bottom)
+          spl(sl_channel_out) = dt < imp_len_sec/2 ?
+            sin(2*$pi * (fmin/swipe_alpha) * (exp(swipe_alpha*dt) - 1)) :
+            sin(2*$pi * (fmin/swipe_alpha) * (exp(swipe_alpha*(imp_len_sec - dt)) - 1));
+        )
+        : sl_shape == 9 ? (spl(sl_channel_out) = rand(2)-1) // White noise
+        : sl_shape == 10 ? (spl(sl_channel_out) = (rand(2)-1) * envelope_smooth(dt/imp_len_sec)) // White noise smooth
+        : sl_shape == 11 ? (0) // Continuous sound also handled above
+        : sl_shape == 12 ? (spl(sl_channel_out) = sin(2*$pi * smpl_idx/srate*sl_freq) * envelope_peak(dt/imp_len_sec/2 + 0.5)) // Continuous sound also handled above
+        : sl_shape == 13 ? (spl(sl_channel_out) = sin(2*$pi * dt*sl_freq))
+        : sl_shape == 14 ? (spl(sl_channel_out) = sin(2*$pi * dt*sl_freq) * envelope_smooth(dt/imp_len_sec))
+        : sl_shape == 15 ? (spl(sl_channel_out) = sin(2*$pi * dt*sl_freq) * envelope_peak(dt/imp_len_sec))
+        : spl(sl_channel_out) = 0;
+      ) : (
+        sl_shape == 12 ?
+        (spl(sl_channel_out) = dt > ir_length_sec ? sin(2*$pi * smpl_idx/srate*sl_freq) : 0) // Continuous sound also handled above
+        : spl(sl_channel_out) = 0;
+      )
+    )
+    : sl_shape == 16 ? (spl(sl_channel_out) = dt < floor(sl_imp_len*2)/2/sl_freq ? sin(2*$pi * dt*sl_freq) : 0)
+    : sl_shape == 17 ? (spl(sl_channel_out) = dt < floor(sl_imp_len*2)/2/sl_freq ? sin(2*$pi * dt*sl_freq) * (sin($pi * dt*sl_freq/(floor(sl_imp_len*2)/2))^2) : 0)
+    : spl(sl_channel_out) = 0;
+  );
+
+  pos += 1;
+  ir_size = pos;
+);
+
+smpl_idx += 1;
+
+@gfx 800 500
+
+abs(mouse_hwheel) > abs(mouse_wheel) ? (mouse_wheel = 0) : (mouse_hwheel = 0);
+mouse_wheel ? (
+  g_i = mouse_wheel * (sl_length - sl_offset)/10000;
+  mouse_cap&(4+16+32) ? (g_i /= 10); // Alt, Ctrl, Cmd, Win
+  sl_length = max(min(sl_length - g_i, MAX_REC_LENGTH_SEC*1000), sl_offset);
+  mouse_wheel = 0;
+  onSlider();
+);
+
+mouse_hwheel ? (
+  g_i = mouse_hwheel * (sl_length - sl_offset)/10000;
+  mouse_cap&(4+16+32) ? (g_i /= 10); // Alt, Ctrl, Cmd, Win
+  sl_offset = max(min(sl_offset - g_i, (ir_length_sec - 0.001)*1000), 0);
+  sl_length = max(min(sl_length - g_i, MAX_REC_LENGTH_SEC*1000), sl_offset);
+  mouse_hwheel = 0;
+  onSlider();
+);
+
+menu = mouse_cap&2 ? gfx_showmenu("Set start|Set end|Set start = auto") : 0;
+
+menu == 3 ? (
+  sl_offset = data[offset+MAX_TOTAL_REC_LENGTH+3]/srate*1000;
+);
+
+//mem_get_values(data, debug0, debug1, debug2, debug3, debug4, debug5, debug6, debug7, debug8, debug9, debug10, debug11, debug12, debug13, debug14, debug15, debug16, debug17, debug18, debug19, debug20, debug21, debug22, debug23, debug24, debug25, debug26, debug27, debug28, debug29, debug30, debug31, debug32, debug33, debug34, debug35, debug36, debug37, debug38, debug39, debug40);
+
+gfx_ymax = 1;
+sl_offset = min(sl_offset, MAX_REC_LENGTH_SEC*1000-1);
+sl_offset > (sl_length - 1) ? (sl_length = sl_offset + 1; onSlider(); );
+offset_scale = ir_length_sec / (ir_length_sec - sl_offset/1000);
+gfx_w1 = gfx_w - 1;
+gfx_x_offset = gfx_w1 - gfx_w1 * offset_scale;
+gfx_measurestr("00000.00ms ", str_w, str_h); str_h *= 1.5;
+gfx_measurestr("#########", btn_w, btn_h);  btn_h += 10;  btn_w2 = btn_w / 4;
+
+function goto(x, y) ( gfx_x = x; gfx_y = y; );
+function setcolor3(r,g,b) ( gfx_r=r; gfx_g=g; gfx_b=b; );
+function setcolor(color) ( gfx_r = ((color>>16)&$xFF)/255.0; gfx_g = ((color>>8)&$xFF)/255.0; gfx_b = (color&$xFF)/255.0; );
+function x2sc(x) ( x / ir_size_max * gfx_w1 * offset_scale + gfx_x_offset + 0.5; );
+function y2sc(y) ( (0.5-y/2) * gfx_h );
+function sc2x(x) ( (x - gfx_x_offset) * ir_size_max / gfx_w1 / offset_scale );
+function sc_goto(x, y) ( gfx_x = x2sc(x); gfx_y = y2sc(y); );
+function sc_lineto(x, y) ( gfx_lineto(x2sc(x), y2sc(y)); );
+
+function gfx_banner(x, y, txt, color, bgcolor) local(w h border) (
+  border = 5;
+  gfx_measurestr(txt, w, h);
+  setcolor(color); gfx_rect(x-border, y-border, w+border*2-1, h+border*2-1);
+  setcolor(bgcolor); goto(x, y); gfx_drawstr(txt);
+);
+
+// Mouse
+mouseDown_last = mouseDown;
+mouseDown = mouse_cap&1;
+mouse_over_graph = mouse_x >= 0 && mouse_x < gfx_w && mouse_y >= 0 && mouse_y < gfx_h;
+
+// Graph
+
+// mark block size
+setcolor3(1,1,1); gfx_a = 0.3;
+gfx_rect(0, 0, x2sc(samplesblock), gfx_h);
+gfx_a = 1;
+
+// mark impulse length
+sl_shape != 0 && sl_shape != 11 ? (
+  setcolor3(1,1,1); gfx_a = 0.5;
+  g_i =
+    sl_shape == 16 || sl_shape == 17 ? floor(sl_imp_len*2)/2*1000/sl_freq
+    : sl_imp_len;
+  goto(g_i / (sl_length - sl_offset) * gfx_w1, 0);
+  gfx_rectto(gfx_x+2, gfx_h);
+  // gfx_a = 1;
+  gfx_y -= str_h; gfx_drawstr("Impulse",1+8+256,gfx_x-2, gfx_h-2);
+);
+
+
+gfx_step = int(sc2x(1) - sc2x(0));
+
+LOGSCALE_FLOOR_DB = -sl_dbfloor;
+LOGSCALE_FLOOR_MIN = db2v(LOGSCALE_FLOOR_DB*2);
+function val2dby(val) ( val > LOGSCALE_FLOOR_MIN ? 1 - v2db(val)/LOGSCALE_FLOOR_DB*2 : -1 );
+function yl(y) (
+  !sl_logscale ? y : (
+    y > LOGSCALE_FLOOR_MIN ? 1 - v2db(y)/LOGSCALE_FLOOR_DB*2 : -1
+  )
+);
+
+gfx_data = !sl_logscale ? data : (data + MAX_1_REC_LENGTH);
+function gfx_graph(idx) local(offset g_x g_idx g_min g_max g_max2 g_next) (
+  offset = records_offset * idx;
+  gfx_step < 4 && !sl_logscale ? (
+    sc_goto(0, yl(gfx_data[offset]/gfx_ymax));
+    g_i = 0; loop(ir_size_max,
+      sc_lineto(g_i, gfx_data[offset + g_i]/gfx_ymax);
+      g_i += 1;
+    );
+    gfx_a /= 2;
+    // local peaks
+    g_i = 0; loop(ir_size_max,
+      (data[offset + g_i + MAX_1_REC_LENGTH*2]/gfx_ymax) > 0 ? (
+        sc_goto(g_i, data[offset + g_i + MAX_1_REC_LENGTH]/gfx_ymax); gfx_lineto(gfx_x, 0);
+      );
+      g_i += 1;
+    );
+    gfx_a *= 2;
+  ) : (
+    g_idx = offset + int(sc2x(0));
+    g_x = 0; loop(gfx_w,
+      g_next = offset + int(sc2x(g_x + 1));
+      g_min = g_max = yl(gfx_data[g_idx]/gfx_ymax);
+      g_max2 = data[g_idx+MAX_1_REC_LENGTH*2]/gfx_ymax;
+      while (g_idx < g_next) (
+        g_idx += 1;
+        g_min = min(g_min, yl(gfx_data[g_idx]/gfx_ymax));
+        g_max = max(g_max, yl(gfx_data[g_idx]/gfx_ymax));
+        g_max2 = max(g_max2, data[g_idx+MAX_1_REC_LENGTH*2]/gfx_ymax);
+      );
+      goto(g_x, y2sc(g_min)); gfx_lineto(g_x, y2sc(g_max), 0);
+      g_max2 > 0 ? (gfx_a /= 2; gfx_lineto(g_x, 0, 0); gfx_a *= 2;);
+      g_idx = g_next;
+      g_x += 1;
+    );
+  );
+  data_rec[MAX_TOTAL_REC_LENGTH+3] ? (
+    goto(x2sc(data[offset+MAX_TOTAL_REC_LENGTH+3])-1, 0); gfx_rectto(gfx_x+2, gfx_h); // impulse start
+  );
+  sl_logscale ? (
+    sc_goto(0, yl(data[offset + MAX_TOTAL_REC_LENGTH+1]/gfx_ymax));
+    gfx_a /= 3; gfx_lineto(gfx_w, gfx_y, 0);
+    gfx_a /= 3; gfx_rectto(0, gfx_h);
+    gfx_a *= 3;
+    sc_goto(0, yl(data[offset + MAX_TOTAL_REC_LENGTH+2]/gfx_ymax)); // noise level
+    gfx_lineto(gfx_w, gfx_y, 0);
+  );
+  gfx_volume = v2db(gfx_ymax);
+  gfx_a = 1;
+  gfx_x = gfx_w - btn_w - btn_w2*2 - str_w; gfx_y = btn_h*idx + 5; gfx_drawnumber(gfx_volume, 2); gfx_drawstr("dB");
+  gfx_volume > -120 ? (
+    gfx_x = gfx_w - btn_w - btn_w2*2 - str_w; gfx_y += str_h; gfx_rectto(gfx_x + str_w*(gfx_volume+120)/120, gfx_y-3);
+  );
+  gfx_volume > -sl_dbfloor ? (
+    gfx_x = 1+idx*5; gfx_y = gfx_h; gfx_rectto(gfx_x+4, gfx_h-gfx_h*(gfx_volume+sl_dbfloor)/sl_dbfloor);
+  );
+  gfx_volume > -2 ? gfx_banner(20, 15, "CLIP", $xFF0000, $xFFFFFF);
+);
+
+// Speaker
+gfx_ymax = data[MAX_TOTAL_REC_LENGTH];
+gfx_ymax > _INF_V ? (
+  setcolor3(0.5, 1, 0.3); gfx_a = 0.6;
+  gfx_graph(0);
+);
+
+// Room
+gfx_ymax = data[records_offset + MAX_TOTAL_REC_LENGTH];
+gfx_ymax > _INF_V ? (
+  setcolor3(0, 1, 1); gfx_a = 0.6;
+  gfx_graph(1);
+);
+
+// Ambience
+gfx_ymax = data[records_offset*2 + MAX_TOTAL_REC_LENGTH];
+gfx_ymax > _INF_V ? (
+  setcolor3(1, 1, 1); gfx_a = 0.5;
+  gfx_graph(2);
+);
+
+// Scanned graph
+scan_pos > 0 ? (
+  // Current scan position
+  sl_scan ? ( setcolor3(1,0,0); gfx_a = 0.25; gfx_rect((scan_pos-scan_step/4) * gfx_w, 0, scan_step/2 * gfx_w, gfx_h); );
+
+  // Grid lines
+  !mouse_over_graph ? (
+    setcolor3(1, 1, 1);
+    g_i = 1; loop(3,
+      goto((freq2note( 20*g_i)-note_min)/swipe_range * gfx_w - 1, 0); gfx_a = 0.15; gfx_rectto(gfx_x+2, gfx_h); gfx_y -= str_h; gfx_a = 0.4; gfx_drawnumber( 20*g_i,0);
+      goto((freq2note( 50*g_i)-note_min)/swipe_range * gfx_w - 1, 0); gfx_a = 0.15; gfx_rectto(gfx_x+2, gfx_h); gfx_y -= str_h; gfx_a = 0.4; gfx_drawnumber( 50*g_i,0);
+      goto((freq2note(100*g_i)-note_min)/swipe_range * gfx_w - 1, 0); gfx_a = 0.15; gfx_rectto(gfx_x+2, gfx_h); gfx_y -= str_h; gfx_a = 0.4; gfx_drawnumber(100*g_i,0);
+      g_i *= 10;
+    );
+  );
+
+  // Graph
+  setcolor3(1,0,0);
+  gfx_a = 1; goto(0, y2sc(val2dby(data[SCAN_OFFSET]/scan_max)));
+  g_i = 0; loop(SCAN_SIZE+1,
+    data[SCAN_OFFSET + g_i] > 0 ? gfx_lineto(g_i * gfx_w / SCAN_SIZE, y2sc(val2dby(data[SCAN_OFFSET + g_i]/scan_max)), 1);
+    g_i += 1;
+  );
+);
+
+// Find local maximums closer than N wavelengths
+data[MAX_TOTAL_REC_LENGTH] > _INF_V && data[MAX_TOTAL_REC_LENGTH + records_offset] > _INF_V ? (
+  MAX_WAVELENGTHS_DIFF = 3;
+  setcolor3(1, 1, 0); gfx_a = 0.3;
+  diff = MAX_WAVELENGTHS_DIFF * srate/sl_freq;
+  update = i1 = i2 = 0;
+  g_idx = 0; loop(ir_size_max,
+    v1 = data[g_idx + MAX_1_REC_LENGTH*2];
+    v2 = data[g_idx + MAX_1_REC_LENGTH*2 + records_offset];
+    update =
+      v1 > 0 && v2 > 0 ? i1 = i2 = g_idx
+      : v1 > 0 ? i1 = g_idx
+      : v2 > 0 ? i2 = g_idx
+      : 0;
+    idiff = abs(i1 - i2);
+    update && idiff < diff ? (
+      significance = v2db(min(
+            data[i1 + MAX_1_REC_LENGTH*2]                  / data[offset + MAX_TOTAL_REC_LENGTH+1],
+            data[i2 + MAX_1_REC_LENGTH*2 + records_offset] / data[offset + MAX_TOTAL_REC_LENGTH+1 + records_offset])) / 12;
+      significance /= 1 + idiff / srate * sl_freq / MAX_WAVELENGTHS_DIFF;
+      gfx_g = min(1, significance); gfx_b = min(1, max(0, significance - 1)); gfx_a = min(1, max(0.3, significance/2));
+      goto(x2sc(min(i1,i2)), gfx_h - 1 - significance*gfx_h/10); gfx_rectto(x2sc(max(i1,i2))+1, gfx_h);
+      update = 0;
+    );
+    g_idx += 1;
+  );
+  gfx_a = 1;
+);
+
+// X Axis
+!sl_logscale ? (
+  setcolor3(1, 1, 1); gfx_a = 1;
+  gfx_line(0, gfx_h/2, gfx_w, gfx_h/2);
+);
+
+// Mouse guides
+setcolor3(1, 1, 1);
+gfx_x = gfx_w1 - str_w*4; gfx_y = gfx_h - str_h; gfx_drawstr("Sample rate: "); gfx_drawnumber(srate, 0);
+!mouseDown || !mouse_over_graph ? (mouseDown_graph_last = mouseDown_graph = 0; mouseDown_graph_t = 0;);
+!mouse_over_button && mouse_over_graph ? (
+  // Shade for info area
+  setcolor3(0, 0, 0); gfx_a = 0.5; gfx_rect(gfx_w1 - str_w*4 - 5, gfx_h - str_h*4 - 5, gfx_w, gfx_h); gfx_a = 1;
+
+  // Crosshair
+  setcolor3(1, 1, 1);
+  gfx_a = 0.9;
+  gfx_line(mouse_x, 0, mouse_x, gfx_h);
+  gfx_line(0, mouse_y, gfx_w, mouse_y);
+  // Harmonics
+  setcolor3(1, 0.2, 1);
+  gfx_a = 0.4;
+  gfx_i = 2; loop(10,
+    gfx_line(mouse_x/gfx_i, 0, mouse_x/gfx_i, gfx_h);
+    gfx_line(mouse_x*gfx_i, 0, mouse_x*gfx_i, gfx_h);
+    gfx_a *= 0.85;
+    gfx_i += 1;
+  );
+  setcolor3(1, 1, 1);
+  gfx_a = 1;
+
+  // Print info: x offset in ms, y offset.
+  gfx_y = gfx_h - str_h*4;
+  gfx_x = gfx_w1 - str_w*4; gfx_drawstr("Volume:");
+  gfx_volume = (!sl_logscale ?
+    (gfx_h/2 - mouse_y) / (gfx_h/2) :
+    db2v(mouse_y/gfx_h*LOGSCALE_FLOOR_DB));
+  gfx_x = gfx_w1 - str_w*3; gfx_drawnumber(gfx_volume, 2);
+  abs(gfx_volume) > _INF_V ? (
+    gfx_x = gfx_w1 - str_w*2; gfx_drawnumber(v2db(abs(gfx_volume)), 2); gfx_drawstr("dB");
+  );
+
+  gfx_y = gfx_h - str_h*3;
+  gfx_x = gfx_w1 - str_w*4; gfx_drawstr("Offset:");
+  gfx_offset_ms = sc2x(mouse_x) * ir_length_sec / ir_size_max * 1000 - sl_offset;
+  gfx_x = gfx_w1 - str_w*3; gfx_drawnumber(gfx_offset_ms, 2); gfx_drawstr("ms");
+  gfx_offset_ms > 0.02 ? (
+    gfx_x = gfx_w1 - str_w*2; gfx_drawnumber(1000/gfx_offset_ms, 2); gfx_drawstr("Hz");
+  );
+  gfx_offset_cm = gfx_offset_ms * 34.3;
+  gfx_x = gfx_w1 - str_w; gfx_drawnumber(gfx_offset_cm >= 300 ? gfx_offset_cm/100 : gfx_offset_cm, 2); gfx_drawstr(gfx_offset_cm >= 300 ? "m" : "cm");
+  gfx_y = gfx_h - str_h*2;
+  gfx_x = gfx_w1 - str_w*3; gfx_drawnumber(sc2x(mouse_x)-sc2x(0), 0); gfx_drawstr(" smpl");
+  sl_shape >= 6 && sl_shape <= 8 && gfx_offset_ms / 1000 < imp_len_sec ? (
+    // gfx_x = gfx_w1 - str_w*3;
+    gfx_drawstr("  Swipe: ");
+    gfx_drawnumber((
+      sl_shape == 6 ? note2freq(note_max - swipe_range * gfx_offset_ms/1000/imp_len_sec)
+    : sl_shape == 7 ? note2freq(note_min + swipe_range * gfx_offset_ms/1000/imp_len_sec)
+    : sl_shape == 8 ? (
+        gfx_offset_ms/1000 < imp_len_sec/2 ?
+          note2freq(note_min + swipe_range * 2*gfx_offset_ms/1000/imp_len_sec)
+          : note2freq(note_min + swipe_range * 2*(imp_len_sec - gfx_offset_ms/1000)/imp_len_sec))
+    : 0
+    ), 0);
+    gfx_drawstr("Hz");
+  );
+
+  scan_pos > 0 ? ( // Scanned graph frequency
+    setcolor3(1,0.5,0.5);
+    gfx_x = gfx_w1 - str_w*4; gfx_drawnumber(note2freq(note_min + swipe_range*mouse_x/gfx_w), 0); gfx_drawstr(" Hz");
+  );
+
+  // Mouse click - set offset
+  mouseDown_graph_t == 0 && mouseDown ? (mouseDown_graph_t = time_precise());
+  mouseDown_graph_last = mouseDown_graph;
+  mouseDown_graph = mouseDown_graph_t != 0 && time_precise() - mouseDown_graph_t > 0.15;
+  (mouseDown_graph && !mouseDown_graph_last) || menu == 1 ? (
+    // click - set offset to the clicked position
+    sl_offset = max(min(sc2x(mouse_x) / ir_size_max * ir_length_sec * 1000, ir_length_sec * 1000), 0);
+  )
+  : menu == 2 ? (
+    // end - set end to the clicked position
+    sl_length = max(min(sc2x(mouse_x) / ir_size_max * ir_length_sec * 1000, ir_length_sec * 1000), sl_offset + 1);
+    onSlider();
+  );
+);
+
+// Buttons
+gfx_a = 1;
+mouse_over_button = 0;
+function button(text, x1,y1, x2,y2, colorText, colorBg) (
+  (this._mouseOverButton = (mouse_x >= x1 && mouse_x <= x2 && mouse_y >= y1 && mouse_y <= y2)) ? (mouse_over_button = 1);
+  mouseDown ? (
+    !mouseDown_last ? (this._mouseDownInButton = this._mouseOverButton);
+  ) : (
+    this._mouseDownInButton = 0;
+  );
+  setcolor(!this._mouseDownInButton ? $xF0F0F0 : $x808080); gfx_triangle(x1,y2, x1,y1, x2,y1);
+  setcolor(!this._mouseDownInButton ? $x808080 : $xF0F0F0); gfx_triangle(x1,y2, x2,y1, x2,y2);
+  x1 += 2; y1 += 2; x2 -= 2; y2 -= 2;
+  setcolor(colorBg);    gfx_rect(x1,y1, x2-x1+1,y2-y1+1);
+  goto(x1+1+this._mouseDownInButton*2, y1+2);
+  setcolor(colorText);  gfx_drawstr(text, 5, x2, y2);
+  this.click = !this._mouseDownInButton_last && this._mouseDownInButton;
+  this._mouseDownInButton_last = this._mouseDownInButton;
+  this.click;
+);
+ch = gfx_getchar();
+speakerclr.button(   "C", gfx_w - btn_w2*2 - btn_w, btn_h * 0, gfx_w - btn_w2 - btn_w - 1, btn_h * 0 + btn_h - 1, $xFF0000, $xC0C0C0) || ch == 'S' ? (sl_repeat == 1 ? sl_repeat = 0 : (bw.bw2_init(0); memset(data, _INF_V, records_offset);););
+roomclr.button(      "C", gfx_w - btn_w2*2 - btn_w, btn_h * 1, gfx_w - btn_w2 - btn_w - 1, btn_h * 1 + btn_h - 1, $xFF0000, $xC0C0C0) || ch == 'R' ? (sl_repeat == 2 ? sl_repeat = 0 : (bw.bw2_init(0); memset(data + records_offset, _INF_V, records_offset);););
+ambclr.button(       "C", gfx_w - btn_w2*2 - btn_w, btn_h * 2, gfx_w - btn_w2 - btn_w - 1, btn_h * 2 + btn_h - 1, $xFF0000, $xC0C0C0) || ch == 'A' ? (sl_repeat == 3 ? sl_repeat = 0 : (bw.bw2_init(0); memset(data + records_offset*2, _INF_V, records_offset);););
+speakerrep.button(   "R", gfx_w - btn_w2   - btn_w, btn_h * 0, gfx_w          - btn_w - 1, btn_h * 0 + btn_h - 1, sl_repeat == 1 ? $xFFFFFF : $x000000, sl_repeat == 1 ? $x800000 : $xC0C0C0) ? (sl_repeat = sl_repeat ? 0 : 1;sl_scan=0;);
+roomrep.button(      "R", gfx_w - btn_w2   - btn_w, btn_h * 1, gfx_w          - btn_w - 1, btn_h * 1 + btn_h - 1, sl_repeat == 2 ? $xFFFFFF : $x000000, sl_repeat == 2 ? $x800000 : $xC0C0C0) ? (sl_repeat = sl_repeat ? 0 : 2;sl_scan=0;);
+ambrep.button(       "R", gfx_w - btn_w2   - btn_w, btn_h * 2, gfx_w          - btn_w - 1, btn_h * 2 + btn_h - 1, sl_repeat == 3 ? $xFFFFFF : $x000000, sl_repeat == 3 ? $x800000 : $xC0C0C0) ? (sl_repeat = sl_repeat ? 0 : 3;sl_scan=0;);
+speaker.button("Speaker", gfx_w - btn_w, btn_h * 0, gfx_w - 1, btn_h * 0 + btn_h - 1, $x000000, sl_run == 1 && !smplEnd ? $x00FF00 : $x80C080) || ch == 's' ? (sl_repeat ? sl_repeat = 0 : (running = 0; sl_run = 1;);sl_scan=0;);
+room.button(      "Room", gfx_w - btn_w, btn_h * 1, gfx_w - 1, btn_h * 1 + btn_h - 1, $x000000, sl_run == 2 && !smplEnd ? $x00FFFF : $x00C0C0) || ch == 'r' ? (sl_repeat ? sl_repeat = 0 : (running = 0; sl_run = 2;);sl_scan=0;);
+amb.button(   "Ambience", gfx_w - btn_w, btn_h * 2, gfx_w - 1, btn_h * 2 + btn_h - 1, $x000000, sl_run == 3 && !smplEnd ? $xA0A0A0 : $xFFFFFF) || ch == 'a' ? (sl_repeat ? sl_repeat = 0 : (running = 0; sl_run = 3;);sl_scan=0;);
+wavbtn.button(     "WAV", gfx_w - btn_w,   btn_h * 3, gfx_w - btn_w/2 - 1, btn_h * 3 + btn_h - 1, !sl_logscale ? $xFFFF00 : $x000000, !sl_logscale ? $x000080 : $xC0C0C0) || ch == 'w' ? sl_logscale = 0;
+dbbtn.button(       "dB", gfx_w - btn_w/2, btn_h * 3, gfx_w - 1,           btn_h * 3 + btn_h - 1,  sl_logscale ? $xFFFF00 : $x000000,  sl_logscale ? $x000080 : $xC0C0C0) || ch == 'd' ? sl_logscale = 1;
+
+ch == 'Z' ? (
+  sl_scan = sl_repeat = 0; scan_pos = -1;
+  memset(data+SCAN_OFFSET, 0, SCAN_SIZE+1);
+);
+sl_scan && scan_step > 0 && scan_step <= 1 ? (
+  setcolor3(0.8, 0.8, 0.8); gfx_a = 1;
+  gfx_x = gfx_w - btn_w*0.7 - str_w*0.6; gfx_y = btn_h*4 + 5; gfx_drawstr("1/"); gfx_drawnumber((3-sl_scan)/scan_step, 0);
+);
+scanbtn.button( "Zcan", gfx_w - btn_w*0.7, btn_h * 4, gfx_w - 1, btn_h * 4 + btn_h - 1, sl_scan ? $xFFFFFF : $x000000, sl_scan ? $x000080 : mouse_cap & (4+8+16) ? $xC0C0FF : $xC0C0C0) || ch == 'z' ? (
+  // Automatic scanning.
+  sl_scan ? sl_repeat = sl_scan = 0 : (
+    sl_scan = 1; sl_repeat = 1;
+    scan_step = 1; scan_stage_offset = 0.5; scan_max = _INF_V; scan_pos = -1;
+    memset(data+SCAN_OFFSET, 0, SCAN_SIZE+1);
+    mouse_cap & (4+8+16) ? sl_scan = 2; // Shift/Alt/Ctrl - sequential vs scatter scan
+  );
+);
+
+ch == '1' && !sl_run ? (
+  // Apply frequency filter to the first recorfing (speaker) and output to the 3rd (ambience).
+  // can reuse the same instance since no recording is running
+  pos = 0;
+  ir_length_sec = sl_length / 1000.0;
+  ir_size_max = srate * ir_length_sec;
+  MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+  MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+  records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+  data_rec =  data + 2 * records_offset;
+  data_rec2 = data + 2 * records_offset + MAX_1_REC_LENGTH;
+  data_rec3 = data + 2 * records_offset + MAX_1_REC_LENGTH*2;
+  data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+  data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+  data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+  ir_max = _INF_V;
+  data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+  data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+  bw.bw2_init(0);
+
+  pos = 0; loop(MAX_1_REC_LENGTH,
+    g_in = data[pos];
+
+    g_in = bw.bw2_process_sample(g_in);
+
+    ir_max = max(ir_max, abs(g_in));
+    data_rec[pos] = g_in;
+    pos < samplesblock ?
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(g_in)); // max noise level
+
+    // Detect peaks
+    g_in > 0 ? (
+      data_rec[pos-1] < 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = -data_rec2_last_npeak);
+      data_rec2_last_npeak = 0;
+      g_in > data_rec2_last_ppeak ? (data_rec2_last_ppeak = g_in);
+      data_rec2_last_ppeak > data_rec2_last_peak || g_in < data_rec[pos-1] ? (data_rec2_last_peak = data_rec2_last_ppeak);
+    ) : g_in < 0 ? (
+      data_rec[pos-1] > 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_ppeak);
+      data_rec2_last_ppeak = 0;
+      g_in < data_rec2_last_npeak ? (data_rec2_last_npeak = g_in);
+      data_rec2_last_npeak < -data_rec2_last_peak || g_in > data_rec[pos-1] ? (data_rec2_last_peak = -data_rec2_last_npeak);
+    );
+    data_rec2[pos] = cur_peak = max(max(data_rec2_last_peak, data_rec2_last_peak2), data_rec2_last_peak3);
+
+    // Detect impulse start
+    pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+      // 3x noise level
+      i = pos; while (i > samplesblock && data_rec2[i-1] <= data_rec2[i] && data_rec2[i] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( i -= 1 );
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = i;
+    );
+
+    // Local maximums
+    data_rec3[pos] = 0;
+    cur_peak > data_rec2[pos-1] ? (
+      data_rec2_last_inc_pos == 0 ? (
+        data_rec2_peak_low_val = data_rec2_peak_low_val ? min(data_rec2_peak_low_val, abs(data_rec2[pos])) : abs(data_rec2[pos]);
+        data_rec2_last_max_pos && (pos - data_rec2_last_max_pos) <= srate/sl_freq && (data_rec2_peak_high_val - data_rec2_peak_low_val) > 0 ? (
+          data_rec[MAX_TOTAL_REC_LENGTH+1] = data_rec2_peak_noise_val = max(data_rec2_peak_noise_val, data_rec2_peak_high_val - data_rec2_peak_low_val);
+        );
+      );
+      data_rec2_last_inc_pos = pos;
+    ) : cur_peak < data_rec2[pos-1] && data_rec2_last_inc_pos > 0 ? (
+      cur_peak > data_rec2_peak_noise_val ? (
+        //i = pos - 1; while (i >= data_rec2_last_inc_pos) (data_rec3[i] = data_rec2[i]; i -= 1; );
+        i = int((pos + data_rec2_last_inc_pos) / 2);
+        data_rec3[i] = data_rec2[i];
+        data_rec2_peak_high_val = abs(data_rec3[i]);
+        // data_rec2_last_max_pos && (i - data_rec2_last_max_pos) <= max(max((pos - data_rec2_last_inc_pos)*4, srate*sl_imp_len/4/1000), 4*srate/sl_freq) ? (
+        data_rec2_last_max_pos && (
+            (i - data_rec2_last_max_pos) <= max((pos - data_rec2_last_inc_pos)*4, 4*srate/sl_freq) ||
+            (cur_peak - data_rec2_peak_low_val) < 2*data_rec2_peak_noise_val
+        ) ? (
+          data_rec3[data_rec2_last_max_pos] < data_rec3[i] ? (data_rec3[data_rec2_last_max_pos] = 0) :
+          data_rec3[data_rec2_last_max_pos] > data_rec3[i] ? (data_rec3[i] = 0);
+        );
+        data_rec2_peak_low_val = 0;
+        data_rec2_last_max_pos = i;
+        // (data_rec2_peak_high_val && cur_peak &&
+        //   v2db(data_rec2_peak_high_val/cur_peak) > 6 &&
+        //   data_rec2_peak_high_val - cur_peak > data_rec2_peak_noise_val*2) ? (data_rec2_last_inc_pos = 0);
+        data_rec2_last_inc_pos = 0;
+      );
+    );
+
+    pos += 1;
+  );
+
+  data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+);
+
+function square(x) ( x * x );
+
+ch == '2' && !sl_run ? (
+  // Analyze signal energy at any given point and store it in the 3rd recording (ambience).
+  // can reuse the same instance since no recording is running
+  pos = 0;
+  ir_length_sec = sl_length / 1000.0;
+  ir_size_max = srate * ir_length_sec;
+  MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+  MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+  records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+  data_rec =  data + 2 * records_offset;
+  data_rec2 = data + 2 * records_offset + MAX_1_REC_LENGTH;
+  data_rec3 = data + 2 * records_offset + MAX_1_REC_LENGTH*2;
+  data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+  data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+  data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+  ir_max = _INF_V;
+  data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+  data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+  bw.bw2_init(0);
+
+  pos = 1; loop(MAX_1_REC_LENGTH-2,
+    g_in = (data[pos+1] - data[pos-1])/2*srate;
+
+    ir_max = max(ir_max, abs(g_in));
+    data_rec[pos] = g_in;
+    pos < samplesblock ?
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(g_in)); // max noise level
+
+    // Detect peaks
+    g_in > 0 ? (
+      data_rec[pos-1] < 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = -data_rec2_last_npeak);
+      data_rec2_last_npeak = 0;
+      g_in > data_rec2_last_ppeak ? (data_rec2_last_ppeak = g_in);
+      data_rec2_last_ppeak > data_rec2_last_peak || g_in < data_rec[pos-1] ? (data_rec2_last_peak = data_rec2_last_ppeak);
+    ) : g_in < 0 ? (
+      data_rec[pos-1] > 0 ? (data_rec2_last_peak3 = data_rec2_last_peak2; data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_ppeak);
+      data_rec2_last_ppeak = 0;
+      g_in < data_rec2_last_npeak ? (data_rec2_last_npeak = g_in);
+      data_rec2_last_npeak < -data_rec2_last_peak || g_in > data_rec[pos-1] ? (data_rec2_last_peak = -data_rec2_last_npeak);
+    );
+    data_rec2[pos] = cur_peak = max(max(data_rec2_last_peak, data_rec2_last_peak2), data_rec2_last_peak3);
+
+    // Detect impulse start
+    pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+      // 3x noise level
+      i = pos; while (i > samplesblock && data_rec2[i-1] <= data_rec2[i] && data_rec2[i] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( i -= 1 );
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = i;
+    );
+
+    // Local maximums
+    data_rec3[pos] = 0;
+
+    pos += 1;
+  );
+  data_rec[0] = data_rec[pos] = 0;
+
+  // Normalize derivative recording
+  sl_shape >= 11 ? (
+    // Known signal frequency - normalize to it
+    pos = 0; loop(MAX_1_REC_LENGTH,
+      data_rec[pos] /= 2 * $PI * sl_freq;
+      pos += 1;
+    );
+    ir_max /= 2 * $PI * sl_freq;
+  ) : (
+    // Signal frequency is unknown - normalize to max
+    pos = 0; loop(MAX_1_REC_LENGTH,
+      data_rec[pos] *= data[MAX_TOTAL_REC_LENGTH] / ir_max;
+      pos += 1;
+    );
+    ir_max = data[MAX_TOTAL_REC_LENGTH];
+  );
+
+  data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+
+  // Output the sum into recording 2 (room)
+  data_rec =  data + 1 * records_offset;
+  data_rec2 = data + 1 * records_offset + MAX_1_REC_LENGTH;
+  data_rec3 = data + 1 * records_offset + MAX_1_REC_LENGTH*2;
+  data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+  data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+  data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+  ir_max = _INF_V;
+  data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+  data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+  pos = 0; loop(MAX_1_REC_LENGTH-1,
+    // g_in = abs(data[pos]) + abs(data[pos + 2*records_offset]);
+    // https://graphtoy.com/?f1(x,t)=sin(x)&v1=true&f2(x,t)=sin(x+PI/2)&v2=true&f3(x,t)=1-sqrt(1-abs(x))&v3=false&f4(x,t)=&v4=false&f5(x,t)=&v5=false&f6(x,t)=f3(f1(x))+f3(f2(x))&v6=true&grid=2&coords=1.812838959730909,0.3165274374133333,6.157897418768484
+    // g_in = 1-sqrt(1-abs(data[pos]/data[MAX_TOTAL_REC_LENGTH])) + 1-sqrt(1-abs(data[pos + 2*records_offset]/data[MAX_TOTAL_REC_LENGTH + 2*records_offset]));
+    g_in = sqrt(square(data[pos]) + square(data[pos + 2*records_offset]));
+
+    ir_max = max(ir_max, abs(g_in));
+    data_rec2[pos] = data_rec[pos] = g_in;
+    pos < samplesblock ?
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(g_in)); // max noise level
+
+    // Detect impulse start
+    pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+      // 3x noise level
+      i = pos; while (i > samplesblock && data_rec2[i-1] <= data_rec2[i] && data_rec2[i] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( i -= 1 );
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = i;
+    );
+
+    // Local maximums
+    data_rec3[pos] = 0;
+
+    pos += 1;
+  );
+  data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+);
+
+ch == '3' && !sl_run && sl_shape >= 11 ? (
+  // If the frequency is known, process recording 2 (room) with sliding average. Output to recording 2 (ambience).
+  pos = 0;
+  ir_length_sec = sl_length / 1000.0;
+  ir_size_max = srate * ir_length_sec;
+  MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+  MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+  records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+  data_rec =  data + 2 * records_offset;
+  data_rec2 = data + 2 * records_offset + MAX_1_REC_LENGTH;
+  data_rec3 = data + 2 * records_offset + MAX_1_REC_LENGTH*2;
+  data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+  data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+  data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+  ir_max = _INF_V;
+  data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+  data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+  bw.bw2_init(0);
+
+  memset(data_rec , 0, window_size); memset(data_rec2, 0, window_size); memset(data_rec3, 0, window_size); memset(data_rec  + MAX_1_REC_LENGTH - window_size - 1, 0, window_size); memset(data_rec2 + MAX_1_REC_LENGTH - window_size - 1, 0, window_size); memset(data_rec3 + MAX_1_REC_LENGTH - window_size - 1, 0, window_size);
+  // window_size = int(srate / sl_freq/2 + 0.5);
+  window_size = int(srate / sl_freq + 0.5);
+  g_i = g_in = 0;
+  pos = 0; loop(window_size,
+    g_i += data[pos+records_offset];
+    pos += 1;
+  );
+
+  pos1 = 0; pos2 = pos;
+  pos = int(window_size/2); loop(MAX_1_REC_LENGTH - window_size - window_size,
+    g_i += data[pos2 + records_offset] - data[pos1 + records_offset];
+    g_in = g_i / window_size;
+
+    ir_max = max(ir_max, abs(g_in));
+    data_rec2[pos] = data_rec[pos] = g_in;
+    pos < samplesblock ?
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(g_in)); // max noise level
+
+    // Detect impulse start
+    pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+      // 3x noise level
+      g_j = pos; while (g_j > samplesblock && data_rec2[g_j-1] <= data_rec2[g_j] && data_rec2[g_j] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( g_j -= 1 );
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = g_j;
+    );
+
+    // Local maximums
+    data_rec3[pos] = 0;
+
+    pos += 1; pos1 += 1; pos2 += 1;
+  );
+
+  data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+);
+
+ch == '4' && !sl_run && sl_shape >= 11 ? (
+  // If the frequency is known, process recording 2 (room) with sliding max. Output to recording 2 (ambience).
+  pos = 0;
+  ir_length_sec = sl_length / 1000.0;
+  ir_size_max = srate * ir_length_sec;
+  MAX_1_REC_LENGTH = MAX_REC_LENGTH_SEC * srate;
+  MAX_TOTAL_REC_LENGTH = MAX_1_REC_LENGTH*N_RECS;
+  records_offset = MAX_TOTAL_REC_LENGTH + N_REC_VARIABLES;
+  data_rec =  data + 2 * records_offset;
+  data_rec2 = data + 2 * records_offset + MAX_1_REC_LENGTH;
+  data_rec3 = data + 2 * records_offset + MAX_1_REC_LENGTH*2;
+  data_rec2[-1] = data_rec2[0] = data_rec[-1] = data_rec[0] = 0;
+  data_rec2_last_max_pos = data_rec2_last_inc_pos = data_rec2_last_peak3 = data_rec2_last_peak2 = data_rec2_last_peak = data_rec2_last_npeak = data_rec2_last_ppeak = 0;
+  data_rec2_peak_high_val = data_rec2_peak_low_val = data_rec2_peak_noise_val = 0;
+  ir_max = _INF_V;
+  data_rec[MAX_TOTAL_REC_LENGTH+2] = _INF_V; // max noise level
+  data_rec[MAX_TOTAL_REC_LENGTH+3] = 0;      // impulse start
+  bw.bw2_init(0);
+
+  memset(data_rec , 0, window_size); memset(data_rec2, 0, window_size); memset(data_rec3, 0, window_size); memset(data_rec  + MAX_1_REC_LENGTH - window_size - 1, 0, window_size); memset(data_rec2 + MAX_1_REC_LENGTH - window_size - 1, 0, window_size); memset(data_rec3 + MAX_1_REC_LENGTH - window_size - 1, 0, window_size);
+  // window_size = int(srate / sl_freq/2 + 0.5);
+  window_size = int(srate / sl_freq + 0.5);
+  // window_size = int(srate / sl_freq * 2 + 0.5);
+
+  pos = window_size; loop(MAX_1_REC_LENGTH - window_size - window_size,
+    g_in = data[pos - window_size + records_offset];
+    g_i = pos - window_size + 1 + records_offset; loop(window_size - 1,
+      data[g_i] > g_in ? g_in = data[g_i];
+      g_i += 1;
+    );
+
+    ir_max = max(ir_max, abs(g_in));
+    data_rec2[pos] = data_rec[pos] = g_in;
+    pos < samplesblock ?
+      data_rec[MAX_TOTAL_REC_LENGTH+2] = max(data_rec[MAX_TOTAL_REC_LENGTH+2], abs(g_in)); // max noise level
+
+    // Detect impulse start
+    pos > samplesblock && !data_rec[MAX_TOTAL_REC_LENGTH+3] && data_rec[MAX_TOTAL_REC_LENGTH+2] > _INF_V && cur_peak / data_rec[MAX_TOTAL_REC_LENGTH+2] > 3 ? (
+      // 3x noise level
+      g_j = pos; while (g_j > samplesblock && data_rec2[g_j-1] <= data_rec2[g_j] && data_rec2[g_j] >= data_rec[MAX_TOTAL_REC_LENGTH+2]) ( g_j -= 1 );
+      data_rec[MAX_TOTAL_REC_LENGTH+3] = g_j;
+    );
+
+    // Local maximums
+    data_rec3[pos] = 0;
+
+    pos += 1;
+  );
+
+  data_rec[MAX_TOTAL_REC_LENGTH] = ir_max;
+);
+
+// Recording indicator
+sl_run ? (
+  setcolor3(1, 0, 0);
+  gfx_circle(gfx_w - btn_w - btn_w2*2 - str_w*2, btn_h/2, btn_h/2, 1, 1);
+  goto(gfx_w - btn_w - btn_w2*2 - str_w*2 + btn_h/2+2, btn_h/2); gfx_drawstr("REC", 4+256, gfx_x, gfx_y+2);
+);
+
+time_precise() - arm_check_t > 0.2 ? (
+  in_max < in_indicator_min ? (
+    gfx_banner(20, gfx_h - 15 - str_h, "ARM TRACK FOR RECORDING", $xFF0000, $xFFFFFF);
+  ) : (
+    in_max = 0;
+    arm_check_t = time_precise();
+  );
+);
